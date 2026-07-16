@@ -68,7 +68,8 @@ async def test_does_not_invent_facts() -> None:
 
 def test_load_character_card_reads_stem() -> None:
     card = load_character_card("burned_before_skeptic")
-    assert "PROSPECT" in card
+    assert "prospect" in card.lower()
+    assert "Objections" in card
 
 
 @pytest.mark.asyncio
