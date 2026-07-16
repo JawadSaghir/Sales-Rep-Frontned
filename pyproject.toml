@@ -12,6 +12,7 @@ dependencies = [
     "livekit-agents[cartesia,deepgram,openai,silero,turn-detector]~=1.4",
     "mem0ai>=1.0.9",
     "python-dotenv",
+    "pyyaml>=6.0.3",
     "sounddevice>=0.5.5",
 ]
 
