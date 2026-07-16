@@ -1,7 +1,9 @@
 import asyncio
 import json
 import logging
+import os
 import re
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -15,7 +17,9 @@ from livekit.agents import (
     ChatContext,
     JobContext,
     JobProcess,
+    RunContext,
     cli,
+    function_tool,
     room_io,
 )
 from livekit.agents.utils.audio import AudioByteStream
@@ -46,6 +50,26 @@ def load_character_card(stem: str) -> str:
     """Read a prospect character card by file stem from prompts/characters/."""
     path = CHARACTERS_DIR / f"{stem}.md"
     return path.read_text(encoding="utf-8")
+
+
+def make_openrouter_complete(model: str) -> Callable[[str], str]:
+    """Return complete(prompt) -> JSON text, via OpenRouter (OPENROUTER_API_KEY)."""
+    import openai
+
+    client = openai.OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.environ["OPENROUTER_API_KEY"],
+    )
+
+    def complete(prompt: str) -> str:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+        )
+        return resp.choices[0].message.content or ""
+
+    return complete
 
 
 GREETING_INSTRUCTIONS = """Greet the caller warmly and introduce yourself, e.g.:
@@ -177,9 +201,26 @@ class ProspectAgent(Agent):
     """The AI plays a prospect the rep practices against (see prompts/characters/)."""
 
     def __init__(
-        self, character_prompt: str, chat_ctx: ChatContext | None = None
+        self,
+        character_prompt: str,
+        *,
+        coach_factory=None,
+        chat_ctx: ChatContext | None = None,
     ) -> None:
         super().__init__(instructions=character_prompt, chat_ctx=chat_ctx)
+        self._coach_factory = coach_factory
+
+    @function_tool()
+    async def end_practice_and_get_feedback(self, context: RunContext):
+        """End the roleplay and hand the rep to their coach for feedback.
+
+        Call this when the rep says they are done, asks for feedback, or ends the
+        practice.
+        """
+        if self._coach_factory is None:
+            return "Practice ended."
+        coach = self._coach_factory(self.chat_ctx.copy(exclude_instructions=True))
+        return coach, "Handing you to your coach for feedback."
 
 
 server = AgentServer()
