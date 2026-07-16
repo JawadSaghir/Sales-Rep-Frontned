@@ -27,6 +27,11 @@ from livekit.plugins import cartesia, deepgram, openai, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from mem0 import AsyncMemoryClient
 
+from coaching import CoachAgent
+from identity import resolve_rep_id
+from retrieval import SeedRetriever
+from scoring import format_practice_transcript
+
 logger = logging.getLogger("agent")
 
 load_dotenv(".env.local")
@@ -83,6 +88,13 @@ or a natural variation. Then wait for them to respond."""
 # objection-trained characters (see mission.md).
 # ---------------------------------------------------------------------------
 TRANSCRIPTS_DIR = Path(__file__).parent.parent / "transcripts"
+
+# Rep-trainer assets and outputs.
+SCORECARDS_DIR = Path(__file__).parent.parent / "data" / "scorecards"
+RUBRIC_PATH = Path(__file__).parent.parent / "prompts" / "rubric.md"
+SEED_OBJECTION_EXAMPLES_PATH = (
+    Path(__file__).parent.parent / "data" / "seed" / "objection_examples.json"
+)
 
 
 def format_transcript(chat_ctx: ChatContext) -> str:
@@ -256,13 +268,46 @@ def prewarm(proc: JobProcess):
 server.setup_fnc = prewarm
 
 
+def build_coach_factory(
+    *,
+    rubric: str,
+    retriever,
+    complete,
+    rep_id: str,
+    session_id: str,
+    character: str,
+    scorecards_dir: Path,
+    mem0,
+):
+    """Return a factory that builds a CoachAgent from the post-call chat context.
+
+    Called by the prospect's handoff tool once the roleplay ends.
+    """
+
+    def factory(chat_ctx):
+        transcript = format_practice_transcript(chat_ctx)
+        return CoachAgent(
+            transcript=transcript,
+            rubric=rubric,
+            retriever=retriever,
+            complete=complete,
+            rep_id=rep_id,
+            session_id=session_id,
+            character=character,
+            scorecards_dir=scorecards_dir,
+            mem0=mem0,
+            chat_ctx=chat_ctx,
+        )
+
+    return factory
+
+
 @server.rtc_session()
 async def my_agent(ctx: JobContext):
-    # A stable identifier for this caller. Everything this user says is stored in
-    # Mem0 under this id and recalled on their next call. If you can identify the
-    # caller (phone number, account id, logged-in user), set it here so memory is
-    # per-person instead of shared.
-    user_name = "unknown"
+    # Identify the trainee (rep). Scorecards + Mem0 are keyed by this id so
+    # coaching compounds across sessions. Falls back to REP_ID env / "unknown".
+    rep_id = resolve_rep_id(ctx.room.metadata, None, os.environ.get("REP_ID"))
+    user_name = rep_id  # Mem0 + scorecard key
 
     async def shutdown_hook(
         chat_ctx: ChatContext, mem0: AsyncMemoryClient | None, memory_str: str
@@ -348,6 +393,25 @@ async def my_agent(ctx: JobContext):
     # must not abort the call, so mem0 may be None and recall is best-effort.
     mem0 = await init_memory()
 
+    # --- Training assets: prospect card, rubric, retriever, scorer, coach ---
+    character = os.environ.get("PROSPECT_CHARACTER", "burned_before_skeptic")
+    character_prompt = load_character_card(character)
+    rubric = RUBRIC_PATH.read_text(encoding="utf-8")
+    retriever = SeedRetriever(SEED_OBJECTION_EXAMPLES_PATH)
+    complete = make_openrouter_complete("anthropic/claude-3-haiku")
+    safe_room = re.sub(r"[^A-Za-z0-9_-]+", "_", ctx.room.name or "call")
+    session_id = f"{datetime.now():%Y-%m-%dT%H-%M-%S}_{safe_room}"
+    coach_factory = build_coach_factory(
+        rubric=rubric,
+        retriever=retriever,
+        complete=complete,
+        rep_id=rep_id,
+        session_id=session_id,
+        character=character,
+        scorecards_dir=SCORECARDS_DIR,
+        mem0=mem0,
+    )
+
     initial_ctx = ChatContext()
     memory_str = ""
     if mem0 is not None:
@@ -372,7 +436,9 @@ async def my_agent(ctx: JobContext):
     # open-source (WebRTC APM, see APMNoiseSuppression above) — no BVC/Krisp, no
     # LiveKit Cloud, safe in console/mock mode.
     await session.start(
-        agent=Assistant(initial_ctx),
+        agent=ProspectAgent(
+            character_prompt, coach_factory=coach_factory, chat_ctx=initial_ctx
+        ),
         room=ctx.room,
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(
@@ -381,8 +447,11 @@ async def my_agent(ctx: JobContext):
         ),
     )
 
-    # Speak first so the caller isn't met with silence.
-    await session.generate_reply(instructions=GREETING_INSTRUCTIONS)
+    # Speak first, in character as the prospect (guarded, not pitching).
+    await session.generate_reply(
+        instructions="Open the call in character as the prospect: a bit guarded, "
+        "waiting to hear what the rep wants. Do not pitch anything."
+    )
 
     await ctx.connect()
     ctx.add_shutdown_callback(
