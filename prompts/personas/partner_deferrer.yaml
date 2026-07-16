@@ -27,6 +27,11 @@ signature_phrases:
 
 baseline_tone: friendly but non-committal
 
+briefing_summary: >
+  You're calling Denise, 38, who co-owns a boutique event-planning business with
+  her husband. She's warm and genuinely interested, but she makes every big
+  decision as a team and won't commit to anything with a price tag on the spot.
+
 primary_objection_type: authority
 primary_objection_underlying_feeling: >
   loyalty to the partnership and fear of overstepping; deciding alone feels wrong

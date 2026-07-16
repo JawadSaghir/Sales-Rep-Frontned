@@ -71,3 +71,22 @@ def build_prospect_prompt(
     template = Path(template_path).read_text(encoding="utf-8")
     values = build_values(load_persona(stem, personas_dir), load_offer(offer_path))
     return render_prompt(template, values)
+
+
+def build_briefing(stem: str, *, personas_dir: Path = PERSONAS_DIR) -> str:
+    """Assemble the spoken, out-of-character pre-call briefing for the rep.
+
+    Full-scenario scaffold: who they're calling, backstory, character, and the
+    objections to expect — spoken before the roleplay so the rep can prepare.
+    Built from persona YAML so it never drifts from the character.
+    """
+    p = load_persona(stem, personas_dir)
+    name = p["character_name"]
+    return (
+        "Quick briefing before your practice call. "
+        f"{str(p['briefing_summary']).strip()} "
+        "Watch for these objections, in this order: first "
+        f"{p['primary_objection_type']}, then {p['secondary_objection_type']}, "
+        f"and if you get past those, {p['tertiary_objection_type']}. "
+        f"I'll be {name}. Whenever you're ready, go ahead and start your call."
+    )

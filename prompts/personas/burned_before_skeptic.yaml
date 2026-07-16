@@ -28,6 +28,12 @@ signature_phrases:
 
 baseline_tone: guarded and a little impatient
 
+briefing_summary: >
+  You're calling Randy, 45, who owns a small auto-body shop he built himself. A
+  couple of years ago an agency took his money for the better part of a year and
+  delivered almost nothing, so he's guarded and quick to assume he's being sold
+  hope again. He's blunt and gruff, and he respects proof, not promises.
+
 primary_objection_type: trust
 primary_objection_underlying_feeling: >
   fear of getting burned again; you don't believe promises without proof

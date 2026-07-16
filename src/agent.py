@@ -29,24 +29,13 @@ from mem0 import AsyncMemoryClient
 
 from coaching import CoachAgent
 from identity import resolve_rep_id
-from personas import build_prospect_prompt
+from personas import build_briefing, build_prospect_prompt
 from retrieval import SeedRetriever
 from scoring import format_practice_transcript
 
 logger = logging.getLogger("agent")
 
 load_dotenv(".env.local")
-
-# ---------------------------------------------------------------------------
-# PERSONA — edit prompts/agent-instructions.md to change who your agent is.
-# This is the "brain" prompt. Keep it focused: voice agents feel sluggish when
-# the prompt is long, so say who the agent is, its goal, and its tone — no more.
-# The path is resolved relative to THIS file, so it works no matter which
-# directory you launch the agent from.
-# ---------------------------------------------------------------------------
-PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "agent-instructions.md"
-with open(PROMPT_PATH, encoding="utf-8") as f:
-    AGENT_INSTRUCTIONS = f.read()
 
 
 def make_openrouter_complete(model: str) -> Callable[[str], str]:
@@ -67,11 +56,6 @@ def make_openrouter_complete(model: str) -> Callable[[str], str]:
         return resp.choices[0].message.content or ""
 
     return complete
-
-
-GREETING_INSTRUCTIONS = """Greet the caller warmly and introduce yourself, e.g.:
-'Hi, this is Alex — thanks for reaching out! How can I help you today?'
-or a natural variation. Then wait for them to respond."""
 
 
 # ---------------------------------------------------------------------------
@@ -177,28 +161,6 @@ class APMNoiseSuppression(rtc.FrameProcessor[rtc.AudioFrame]):
 
     def _close(self) -> None:
         self._chunker = None
-
-
-class Assistant(Agent):
-    def __init__(self, chat_context: ChatContext | None = None) -> None:
-        super().__init__(
-            instructions=AGENT_INSTRUCTIONS,
-            chat_ctx=chat_context,
-        )
-
-    # To give the agent abilities (look up a price, book a demo, check inventory),
-    # add tools with the @function_tool decorator. Add this import at the top:
-    #   from livekit.agents import function_tool, RunContext
-    #
-    # @function_tool
-    # async def lookup_price(self, context: RunContext, product: str):
-    #     """Look up the current price for a product the caller asks about.
-    #
-    #     Args:
-    #         product: The product name the caller mentioned.
-    #     """
-    #     logger.info(f"Looking up price for {product}")
-    #     return "The Pro plan is $49 per month."
 
 
 class ProspectAgent(Agent):
@@ -476,11 +438,10 @@ async def my_agent(ctx: JobContext):
         ),
     )
 
-    # Speak first, in character as the prospect (guarded, not pitching).
-    await session.generate_reply(
-        instructions="Open the call in character as the prospect: a bit guarded, "
-        "waiting to hear what the rep wants. Do not pitch anything."
-    )
+    # Take the initiative: brief the rep out-of-character on who they're about to
+    # call (persona, backstory, character, and objections to expect). Then the
+    # ProspectAgent takes over in character and waits for the rep to lead.
+    await session.say(build_briefing(character))
 
     await ctx.connect()
     ctx.add_shutdown_callback(

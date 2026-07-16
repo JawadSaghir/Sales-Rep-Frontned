@@ -27,6 +27,11 @@ signature_phrases:
 
 baseline_tone: friendly but frazzled and rushed
 
+briefing_summary: >
+  You're calling Marcus, 41, who runs a fast-growing landscaping company that's
+  outgrowing him. He's friendly but frazzled and stretched thin — anything that
+  sounds like more work on his plate loses him.
+
 primary_objection_type: time_commitment
 primary_objection_underlying_feeling: >
   exhaustion and fear of overcommitting; you equate new things with more work
