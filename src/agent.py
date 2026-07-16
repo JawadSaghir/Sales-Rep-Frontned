@@ -29,6 +29,7 @@ from mem0 import AsyncMemoryClient
 
 from coaching import CoachAgent
 from identity import resolve_rep_id
+from personas import build_prospect_prompt
 from retrieval import SeedRetriever
 from scoring import format_practice_transcript
 
@@ -46,15 +47,6 @@ load_dotenv(".env.local")
 PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "agent-instructions.md"
 with open(PROMPT_PATH, encoding="utf-8") as f:
     AGENT_INSTRUCTIONS = f.read()
-
-# Prospect character cards (the AI role-plays a prospect the rep practices against).
-CHARACTERS_DIR = Path(__file__).parent.parent / "prompts" / "characters"
-
-
-def load_character_card(stem: str) -> str:
-    """Read a prospect character card by file stem from prompts/characters/."""
-    path = CHARACTERS_DIR / f"{stem}.md"
-    return path.read_text(encoding="utf-8")
 
 
 def make_openrouter_complete(model: str) -> Callable[[str], str]:
@@ -210,7 +202,11 @@ class Assistant(Agent):
 
 
 class ProspectAgent(Agent):
-    """The AI plays a prospect the rep practices against (see prompts/characters/)."""
+    """The AI role-plays a prospect the rep practices against.
+
+    Persona comes from prompts/personas/<stem>.yaml rendered into
+    prompts/prospect_template.md (see personas.build_prospect_prompt).
+    """
 
     def __init__(
         self,
@@ -221,6 +217,12 @@ class ProspectAgent(Agent):
     ) -> None:
         super().__init__(instructions=character_prompt, chat_ctx=chat_ctx)
         self._coach_factory = coach_factory
+        self.signals: list[dict[str, str]] = []
+
+    def _to_coach(self):
+        if self._coach_factory is None:
+            return None
+        return self._coach_factory(self.chat_ctx.copy(exclude_instructions=True))
 
     @function_tool()
     async def end_practice_and_get_feedback(self, context: RunContext):
@@ -229,10 +231,37 @@ class ProspectAgent(Agent):
         Call this when the rep says they are done, asks for feedback, or ends the
         practice.
         """
-        if self._coach_factory is None:
+        coach = self._to_coach()
+        if coach is None:
             return "Practice ended."
-        coach = self._coach_factory(self.chat_ctx.copy(exclude_instructions=True))
         return coach, "Handing you to your coach for feedback."
+
+    @function_tool()
+    async def end_call(self, context: RunContext, reason: str):
+        """End the call because you (the prospect) have shut down — a hard no.
+
+        Call this only when you have hit your shutdown condition and will not
+        re-engage. The rep still gets a coaching debrief afterward.
+        """
+        logger.info("Prospect ended call: %s", reason)
+        coach = self._to_coach()
+        if coach is None:
+            return "Call ended."
+        return coach, "Ending the call."
+
+    @function_tool()
+    async def log_prospect_signal(
+        self, context: RunContext, signal_type: str, quote: str
+    ):
+        """Silently record a notable signal (the rep never hears this).
+
+        Args:
+            signal_type: e.g. "interest", "buying_signal", or "hard_no".
+            quote: your own words, verbatim.
+        """
+        self.signals.append({"signal_type": signal_type, "quote": quote})
+        logger.info("Prospect signal [%s]: %s", signal_type, quote)
+        return None
 
 
 server = AgentServer()
@@ -395,7 +424,7 @@ async def my_agent(ctx: JobContext):
 
     # --- Training assets: prospect card, rubric, retriever, scorer, coach ---
     character = os.environ.get("PROSPECT_CHARACTER", "burned_before_skeptic")
-    character_prompt = load_character_card(character)
+    character_prompt = build_prospect_prompt(character)
     rubric = RUBRIC_PATH.read_text(encoding="utf-8")
     retriever = SeedRetriever(SEED_OBJECTION_EXAMPLES_PATH)
     complete = make_openrouter_complete("anthropic/claude-3-haiku")

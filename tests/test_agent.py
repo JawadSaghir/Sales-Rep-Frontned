@@ -8,7 +8,8 @@ tokens burned). Run with: uv run pytest
 import pytest
 from livekit.agents import AgentSession, inference, llm
 
-from agent import Assistant, ProspectAgent, load_character_card
+from agent import Assistant, ProspectAgent
+from personas import build_prospect_prompt
 
 
 def _llm() -> llm.LLM:
@@ -66,21 +67,15 @@ async def test_does_not_invent_facts() -> None:
         result.expect.no_more_events()
 
 
-def test_load_character_card_reads_stem() -> None:
-    card = load_character_card("burned_before_skeptic")
-    assert "prospect" in card.lower()
-    assert "Objections" in card
-
-
 @pytest.mark.asyncio
 async def test_prospect_stays_in_character_and_objects() -> None:
     """The prospect persona resists and raises an objection rather than selling."""
-    card = load_character_card("burned_before_skeptic")
+    prompt = build_prospect_prompt("burned_before_skeptic")
     async with (
         _llm() as judge,
         AgentSession(llm=judge) as session,
     ):
-        await session.start(ProspectAgent(card))
+        await session.start(ProspectAgent(prompt))
         result = await session.run(
             user_input="Hi, I'd love to tell you about our casting program!"
         )
