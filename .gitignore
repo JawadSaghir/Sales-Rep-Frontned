@@ -10,3 +10,11 @@ __pycache__
 .DS_Store
 .idea
 .vscode
+# Frontend
+frontend/node_modules
+frontend/.next
+frontend/.env*
+# Call transcripts (contain real conversation content / PII)
+transcripts/
+# Persisted per-rep scorecards (training output, keyed by rep_id)
+data/scorecards/
