@@ -69,3 +69,20 @@ def is_real_call(row: dict) -> bool:
         (row.get("grade") or "").strip()
     )
     return has_text or has_score
+
+
+def parse_close_ask(raw: str) -> bool | None:
+    """yes*→True, no*→False, unclear/partial/blank→None."""
+    v = (raw or "").strip().lower()
+    if v.startswith("yes"):
+        return True
+    if v.startswith("no"):
+        return False
+    return None
+
+
+def has_numeric_score(row: dict) -> bool:
+    """True when the row carries a usable numeric grade (newer rubric)."""
+    if (row.get("total_score") or "").strip():
+        return True
+    return normalize_grade(row.get("grade", ""))[0] is not None

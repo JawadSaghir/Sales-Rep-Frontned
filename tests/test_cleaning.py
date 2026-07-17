@@ -1,4 +1,10 @@
-from cleaned_data.cleaning_utils import normalize_grade, parse_no_show, is_real_call
+from cleaned_data.cleaning_utils import (
+    normalize_grade,
+    parse_no_show,
+    is_real_call,
+    parse_close_ask,
+    has_numeric_score,
+)
 
 
 def test_normalize_grade_letters_and_labels():
@@ -60,3 +66,20 @@ def test_is_real_call_drops_no_show_and_empty_rows():
     assert (
         is_real_call({"no_show": "no", "total_score": "", "grade": ""}) is False
     )
+
+
+def test_parse_close_ask():
+    assert parse_close_ask("yes") is True
+    assert parse_close_ask("Yes — $2,500 down today") is True
+    assert parse_close_ask("no") is False
+    assert parse_close_ask("No — not applicable") is False
+    assert parse_close_ask("unclear") is None
+    assert parse_close_ask("Partially — used 1-10 scale") is None
+    assert parse_close_ask("") is None
+
+
+def test_has_numeric_score():
+    assert has_numeric_score({"total_score": "47", "grade": ""}) is True
+    assert has_numeric_score({"total_score": "", "grade": "B+"}) is True
+    assert has_numeric_score({"total_score": "", "grade": ""}) is False
+    assert has_numeric_score({"total_score": "", "grade": "N/A"}) is False
