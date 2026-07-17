@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
 
 import numpy as np
 
+if TYPE_CHECKING:
+    import openai
 
-def make_client():
+
+def make_client() -> openai.OpenAI:
     import openai
 
     return openai.OpenAI(
@@ -17,7 +21,10 @@ def make_client():
 
 
 def embed_texts(
-    texts: list[str], client, model: str | None = None, batch_size: int = 128
+    texts: list[str],
+    client: openai.OpenAI,
+    model: str | None = None,
+    batch_size: int = 128,
 ) -> list[list[float]]:
     model = model or os.environ.get("REP_EMBED_MODEL", "openai/text-embedding-3-small")
     out: list[list[float]] = []
@@ -36,7 +43,7 @@ def cluster_vectors(vectors: list[list[float]], min_cluster_size: int = 5) -> li
         import umap
 
         n_comp = min(5, x.shape[1] - 1)
-        x = umap.UMAP(n_components=n_comp, random_state=42).fit_transform(x)
+        x = umap.UMAP(n_components=n_comp, random_state=42, n_jobs=1).fit_transform(x)
     labels = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size).fit_predict(x)
     return [int(v) for v in labels]
 
