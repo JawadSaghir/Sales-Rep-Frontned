@@ -1,5 +1,6 @@
 from statistics import mean
 
+import pytest
 import yaml
 
 from cleaned_data import db
@@ -297,3 +298,23 @@ def test_build_profile_dict_shape():
     assert "strengths" in prof and "coach_notes" in prof
     # round-trips as YAML
     assert yaml.safe_load(yaml.safe_dump(prof))["rep_slug"] == "mike-zanardelli"
+
+
+def test_export_profiles_writes_yaml(tmp_path):
+    conn = db.connect(":memory:")
+    _seed_two_weaknesses(conn)
+    db.refresh_summary_tables(conn)
+    n = db.export_profiles(conn, out_dir=tmp_path)
+    assert n == 1
+    f = tmp_path / "mike-zanardelli.yaml"
+    assert f.exists()
+    data = yaml.safe_load(f.read_text(encoding="utf-8"))
+    assert data["rep_slug"] == "mike-zanardelli"
+    assert data["recurring_weaknesses"][0]["weakness_type"] == "accepts-stalls"
+
+
+def test_build_profile_dict_unknown_slug_raises():
+    conn = db.connect(":memory:")
+    db.create_schema(conn)
+    with pytest.raises(ValueError):
+        db.build_profile_dict(conn, "does-not-exist")

@@ -173,6 +173,8 @@ def build_profile_dict(
     rep = conn.execute(
         "SELECT rep_id, name, email FROM reps WHERE slug=?", (slug,)
     ).fetchone()
+    if rep is None:
+        raise ValueError(f"no rep with slug {slug!r}")
     stats = aggregate_stats(_rep_calls(conn, rep["rep_id"]), min_scored_calls)
     weaknesses = [
         {
