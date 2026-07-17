@@ -335,3 +335,30 @@ def test_cluster_vectors_separates_two_blobs():
 def test_group_by_cluster_drops_noise():
     grouped = embeddings.group_by_cluster(["x", "y", "z"], [0, 0, -1])
     assert grouped == {0: ["x", "y"]}
+
+
+def test_parse_label_valid_and_invalid():
+    from cleaned_data import clustering
+
+    good = (
+        '{"label":"accepts-stalls","definition":"d","aliases":["stall"],'
+        '"coaching_fix":"probe"}'
+    )
+    parsed = clustering.parse_label(good)
+    assert parsed["label"] == "accepts-stalls"
+    with pytest.raises(ValueError):
+        clustering.parse_label('{"label":"x"}')  # missing keys
+
+
+def test_parse_classification_drops_unknown_ids_and_bad_handled():
+    from cleaned_data import clustering
+
+    content = (
+        '{"weakness_ids":[1,99],"objections":['
+        '{"obj_id":2,"handled":"poorly","quote":"q"},'
+        '{"obj_id":88,"handled":"nope","quote":"q"}]}'
+    )
+    out = clustering.parse_classification(content, valid_ids={1, 2})
+    assert out["weakness_ids"] == [1]  # 99 dropped
+    assert len(out["objections"]) == 1  # obj 88 dropped
+    assert out["objections"][0]["handled"] == "poorly"
