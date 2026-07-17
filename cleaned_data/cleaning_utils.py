@@ -100,6 +100,14 @@ def parse_close_ask(raw: str) -> bool | None:
     return None
 
 
+def _safe_float(value: object) -> float | None:
+    """Parse a numeric string; return None if absent or non-numeric."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def has_numeric_score(row: dict) -> bool:
     """True when the row carries a usable numeric grade (newer rubric)."""
     if (row.get("total_score") or "").strip():
@@ -140,13 +148,18 @@ def pool_weakness_text(row: dict) -> str:
 
 def _trend(scored: list[dict]) -> str:
     """Compare mean total_score of the older vs newer half, by call_date."""
-    dated = [c for c in scored if (c.get("call_date") or "").strip()]
+    dated = [
+        (c["call_date"], score)
+        for c in scored
+        if (c.get("call_date") or "").strip()
+        and (score := _safe_float(c.get("total_score"))) is not None
+    ]
     if len(dated) < 4:
         return "unknown"
-    dated.sort(key=lambda c: c["call_date"])
+    dated.sort(key=lambda d: d[0])
     half = len(dated) // 2
-    first = mean(float(c["total_score"]) for c in dated[:half])
-    second = mean(float(c["total_score"]) for c in dated[half:])
+    first = mean(score for _, score in dated[:half])
+    second = mean(score for _, score in dated[half:])
     if second - first > 2:
         return "improving"
     if first - second > 2:
@@ -158,6 +171,11 @@ def aggregate_stats(calls: list[dict], min_scored_calls: int = 8) -> dict:
     """Deterministic per-rep numeric rollup with thin-data suppression."""
     scored = [c for c in calls if has_numeric_score(c)]
     with_score = [c for c in scored if (c.get("total_score") or "").strip()]
+    numeric_scores = [
+        s
+        for s in (_safe_float(c.get("total_score")) for c in with_score)
+        if s is not None
+    ]
     bands = [b for b in (normalize_grade(c.get("grade", ""))[0] for c in scored) if b]
     asks = [parse_close_ask(c.get("did_rep_ask_for_close", "")) for c in calls]
     clean_asks = [a for a in asks if a is not None]
@@ -169,8 +187,8 @@ def aggregate_stats(calls: list[dict], min_scored_calls: int = 8) -> dict:
         else None
     )
     avg = (
-        round(mean(float(c["total_score"]) for c in with_score), 1)
-        if with_score and confidence == "high"
+        round(mean(numeric_scores), 1)
+        if numeric_scores and confidence == "high"
         else None
     )
     return {

@@ -1,3 +1,5 @@
+from statistics import mean
+
 from cleaned_data.cleaning_utils import (
     aggregate_stats,
     canonicalize_rep,
@@ -168,3 +170,28 @@ def test_aggregate_stats_counts_narrative_only_rows():
     s = aggregate_stats(calls, min_scored_calls=1)
     assert s["calls_with_narrative"] == 2
     assert s["calls_with_numeric_score"] == 1
+
+
+def test_aggregate_stats_ignores_non_numeric_total_score():
+    # 8 calls with genuinely numeric total_score, plus 1 row that passes
+    # has_numeric_score only because of a valid `grade` while `total_score`
+    # is junk ("N/A"). That junk row must not blow up averaging/trend.
+    valid_calls = [
+        _call(
+            str(40 + i),
+            "B",
+            "yes" if i % 2 else "no",
+            f"2026-01-0{i + 1}T10:00:00.000Z",
+        )
+        for i in range(8)
+    ]
+    junk_call = _call("N/A", "B", "yes", "2026-01-09T10:00:00.000Z")
+    calls = [*valid_calls, junk_call]
+
+    s = aggregate_stats(calls, min_scored_calls=8)
+
+    assert s["data_confidence"] == "high"
+    assert s["calls_with_numeric_score"] == 9
+    assert s["avg_total_score"] is not None
+    expected_avg = round(mean(40 + i for i in range(8)), 1)
+    assert s["avg_total_score"] == expected_avg
