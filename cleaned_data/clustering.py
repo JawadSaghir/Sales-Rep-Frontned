@@ -61,15 +61,14 @@ def classify_call(
     text: str, taxonomy: list[dict], client, model: str | None = None
 ) -> dict:
     valid_ids = {t["id"] for t in taxonomy}
-    catalog = "\n".join(f'{t["id"]}: {t["label"]}' for t in taxonomy)
+    catalog = "\n".join(f"{t['id']}: {t['label']}" for t in taxonomy)
     prompt = (
         "Given this fixed taxonomy (id: label):\n"
         + catalog
         + "\n\nClassify the call notes below. Return JSON: "
         '{"weakness_ids":[ids], "objections":[{"obj_id":id,'
         '"handled":"well|poorly|unclear","quote":"short quote"}]}. '
-        "Only use ids from the taxonomy.\n\nNotes:\n"
-        + text[:4000]
+        "Only use ids from the taxonomy.\n\nNotes:\n" + text[:4000]
     )
     for attempt in range(2):
         try:
