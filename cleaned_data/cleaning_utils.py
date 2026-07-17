@@ -6,6 +6,8 @@ whole module is trivially unit-testable.
 
 from __future__ import annotations
 
+import re
+
 _GRADE_MAP: dict[str, str] = {
     # letter grades
     "a+": "elite", "a": "elite", "a-": "strong",
@@ -86,3 +88,14 @@ def has_numeric_score(row: dict) -> bool:
     if (row.get("total_score") or "").strip():
         return True
     return normalize_grade(row.get("grade", ""))[0] is not None
+
+
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
+
+
+def canonicalize_rep(name: str, email: str) -> tuple[str, str, str]:
+    """Return (canonical_name, email_lower, slug); variants collapse to one slug."""
+    canonical_name = " ".join((name or "").split())
+    email_lower = (email or "").strip().lower()
+    slug = _SLUG_RE.sub("-", canonical_name.lower()).strip("-")
+    return (canonical_name, email_lower, slug)

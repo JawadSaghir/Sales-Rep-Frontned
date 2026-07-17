@@ -1,9 +1,10 @@
 from cleaned_data.cleaning_utils import (
-    normalize_grade,
-    parse_no_show,
-    is_real_call,
-    parse_close_ask,
+    canonicalize_rep,
     has_numeric_score,
+    is_real_call,
+    normalize_grade,
+    parse_close_ask,
+    parse_no_show,
 )
 
 
@@ -83,3 +84,15 @@ def test_has_numeric_score():
     assert has_numeric_score({"total_score": "", "grade": "B+"}) is True
     assert has_numeric_score({"total_score": "", "grade": ""}) is False
     assert has_numeric_score({"total_score": "", "grade": "N/A"}) is False
+
+
+def test_canonicalize_rep_collapses_variants():
+    a = canonicalize_rep("Mike Zanardelli", "Mike.Z@Example.com")
+    b = canonicalize_rep("  MIKE   ZANARDELLI ", "mike.z@example.com")
+    assert a[2] == "mike-zanardelli"
+    assert a[2] == b[2]  # same slug despite case/whitespace
+    assert a[1] == "mike.z@example.com"  # email lowercased
+
+
+def test_canonicalize_rep_strips_punctuation():
+    assert canonicalize_rep("O'Brien-Smith, Jr.", "")[2] == "o-brien-smith-jr"
