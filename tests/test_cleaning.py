@@ -3,7 +3,7 @@ from statistics import mean
 import pytest
 import yaml
 
-from cleaned_data import db
+from cleaned_data import db, embeddings
 from cleaned_data.cleaning_utils import (
     aggregate_stats,
     canonicalize_rep,
@@ -318,3 +318,20 @@ def test_build_profile_dict_unknown_slug_raises():
     db.create_schema(conn)
     with pytest.raises(ValueError):
         db.build_profile_dict(conn, "does-not-exist")
+
+
+def test_cluster_vectors_separates_two_blobs():
+    import numpy as np
+
+    rng = np.random.default_rng(0)
+    a = rng.normal(0, 0.02, size=(15, 8)) + 0.0
+    b = rng.normal(0, 0.02, size=(15, 8)) + 5.0
+    vectors = np.vstack([a, b]).tolist()
+    labels = embeddings.cluster_vectors(vectors, min_cluster_size=5)
+    non_noise = {label for label in labels if label != -1}
+    assert len(non_noise) >= 2
+
+
+def test_group_by_cluster_drops_noise():
+    grouped = embeddings.group_by_cluster(["x", "y", "z"], [0, 0, -1])
+    assert grouped == {0: ["x", "y"]}
