@@ -8,6 +8,12 @@ those modules when PyAV is unavailable. On normal machines nothing is ignored
 and all tests run.
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to sys.path so imports from cleaned_data etc. work
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 collect_ignore: list[str] = []
 
 try:
