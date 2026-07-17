@@ -44,9 +44,12 @@ only if this becomes multi-user/web.
 **Spec 1 (this doc)**
 - Clean `data/raw_data/Performance Bot Scorecards-Grid view.csv` in `notebooks/cleaning.ipynb`.
 - Build SQLite DB: `reps`, `calls`, objection taxonomy (**C**), weakness taxonomy (**D**),
-  and the `call_objections` / `call_weaknesses` link tables.
-- Export rep-profile YAML views (**A**).
-- Create the (empty) `personas` / `persona_objections` tables so Spec 2 slots in via one join.
+  the `call_objections` / `call_weaknesses` link tables, summary tables, and `export_meta`.
+- Discover taxonomies via **embeddings + clustering**, LLM-labelled, then **human-approved** in a
+  `taxonomy_studio.ipynb` gate before any profile is generated.
+- Export rep-profile YAML views (**A**) + a profile-quality evaluation report.
+- Create the (empty) `personas` / `persona_objections` / `rep_persona_match_scores` tables so
+  Spec 2 slots in via one join.
 
 **Spec 2 (separate)**
 - Populate personas (**B**) from transcripts + `casting_calls.xlsx`, tagged with objection-type IDs.
@@ -109,15 +112,26 @@ weakness_types(weak_id PK, label, definition, coaching_fix)     -- D
 call_objections(call_id FK, obj_id FK, handling_score, quote)   -- M:N
 call_weaknesses(call_id FK, weak_id FK, evidence_quote)         -- M:N
 
+-- provenance: which build produced the current export
+export_meta(export_id PK, generated_at, taxonomy_version, model_used, git_sha, row_counts_json)
+
 -- created empty in Spec 1, populated in Spec 2:
 personas(persona_id PK, name, ...)                              -- B
 persona_objections(persona_id FK, obj_id FK)                    -- M:N
 ```
 
+### Materialized summary tables (refreshed on each export)
+Precompute the hot queries as plain tables (SQLite lacks true materialized views) so the
+runtime and coaches read them directly instead of re-aggregating:
+- `rep_weakness_summary(rep_id, weak_id, frequency, last_seen)` — per-rep ranked weaknesses.
+- `team_weakness_ranking(weak_id, rep_count, call_count)` — the "weaknesses across all reps" report.
+- `rep_persona_match_scores(rep_id, persona_id, score)` — populated in Spec 2; empty table now.
+
 ### Exports fall out as SQL
 - **Rep profile YAML** ← `reps → calls → call_weaknesses/call_objections`, aggregated.
-- **"Weaknesses across all reps"** ← `SELECT wt.label, COUNT(*) FROM call_weaknesses cw
-  JOIN weakness_types wt USING(weak_id) GROUP BY wt.label ORDER BY 2 DESC`.
+- **"Weaknesses across all reps"** ← read `team_weakness_ranking`.
+- **Runtime drill query** ← `get_rep_drill_plan(slug)` in `db.py`: top-3 rows of
+  `rep_weakness_summary` for the rep + (Spec 2) best `rep_persona_match_scores`.
 - **Rep→persona match (Spec 2)** ← rep's weak `obj_id`s joined to `persona_objections`.
 
 ## Rep profile YAML (exported view)
@@ -160,50 +174,78 @@ cleaned_data/
   __init__.py
   cleaning_utils.py        # pure, unit-tested: normalize_grade, is_real_call,
                            #   parse_close_ask, canonicalize_rep, aggregate_stats
-  db.py                    # thin persistence: create schema, load DataFrame → tables,
-                           #   run export queries
-  clustering.py            # LLM cluster calls: raw free-text → objection_types / weakness_types
-                           #   + assign each call to type IDs (schema-validated)
+  db.py                    # persistence: create schema, load DataFrame → tables,
+                           #   refresh summary tables, export queries, get_rep_drill_plan()
+  embeddings.py            # extract phrases, embed, UMAP+HDBSCAN → proposed clusters
+  clustering.py            # LLM labels clusters (label/definition/aliases/coaching_fix);
+                           #   cheap-model classifier maps each call → type IDs
+  evaluate.py              # profile-quality rubric (see Evaluation)
   rep_trainer.db           # SQLite source of truth
   taxonomies/
-    objection_types.yaml   # human-readable export of table C (review/edit convenience)
-    weakness_types.yaml    # human-readable export of table D
+    objection_types.yaml   # export of table C (also the Taxonomy Studio edit surface)
+    weakness_types.yaml    # export of table D
   rep_profiles/<slug>.yaml # exported rep profile views (A)
 
 notebooks/
-  cleaning.ipynb           # orchestrator; imports cleaned_data.*
+  cleaning.ipynb           # Stage 1: clean → DB → propose clusters → export taxonomy YAML
+  taxonomy_studio.ipynb    # Stage 2 (human): review/merge/split/edit taxonomies, then approve
+                           #   → re-import into DB, classify all calls, export profiles
 
 tests/
   test_cleaning.py         # pytest over pure functions + schema checks
 ```
 
-### Notebook cell order
+### Pipeline stages (two notebooks, human gate between)
+**`cleaning.ipynb` (Stage 1 — automated up to proposal):**
 1. **Load & config** — read CSV (`csv.field_size_limit` bumped), select only INCLUDE columns.
 2. **Filter non-calls** — drop no-show/skipped/ungraded-empty; print before/after counts.
-3. **Normalize** — grade→unified scale (+ `grade_raw` quarantine for junk); close_ask→bool;
+3. **Normalize** — grade→unified scale (+ `grade_raw` quarantine); close_ask→bool;
    rep name/email canonicalization (194-name collision check).
-4. **Load into SQLite** — populate `reps` + `calls`.
-5. **Cluster taxonomies (LLM)** — build `objection_types` (C) + `weakness_types` (D) from the
-   pooled free-text, then tag each call → `call_objections` / `call_weaknesses`.
-6. **Create empty persona tables** (for Spec 2).
-7. **Export views** — rep-profile YAML + taxonomy YAML from SQL; print the team-wide weakness report.
+4. **Load into SQLite** — populate `reps` + `calls`; create empty persona/summary tables.
+5. **Propose clusters** — extract raw weakness/objection phrases → embed → UMAP+HDBSCAN →
+   candidate clusters; LLM labels each (label, definition, aliases, coaching_fix);
+   seed `aliases` from existing `objections.json` types; export draft `taxonomies/*.yaml`.
+
+**`taxonomy_studio.ipynb` (Stage 2 — human-in-the-loop, then finalize):**
+6. **Human review** — sales manager merges/splits/edits weakness & objection types and rewrites
+   `coaching_fix` text in `taxonomies/*.yaml`, then flags the taxonomy **approved**.
+7. **Classify** — cheap model (`gpt-4o-mini`) tags every call against the *frozen* taxonomy →
+   `call_objections` / `call_weaknesses` + evidence quotes.
+8. **Refresh + export** — rebuild summary tables, write `export_meta`, export rep-profile YAML;
+   print `team_weakness_ranking`; run `evaluate.py`.
 
 ### Grade normalization
 Map both rubrics to one ordered band: `elite > strong > good > developing > needs_improvement > weak`.
 Align letter grades and qualitative labels; fix Unicode-minus variants; junk → `grade_raw` only.
 `total_score` (0–100) is the primary numeric; normalized grade is the categorical.
 
-### LLM clustering & synthesis
-- **Provider:** OpenRouter (OpenAI-compatible endpoint), model via `REP_PROFILE_MODEL`,
-  default = current cheapest JSON-capable model. Key: `OPENROUTER_API_KEY`.
-- **Two-pass:** (1) discover canonical objection/weakness clusters from a sampled/pooled set of
-  free-text → the taxonomy tables; (2) classify each call against those clusters (multi-label) →
-  the M:N link tables + evidence quotes.
-- **Validation:** JSON schema (required keys; `frequency`/scores in range); retry on invalid.
+### Taxonomy building — hybrid, not pure LLM synthesis
+Pure LLM theme-synthesis drifts: labels change every re-run, and there's no clean human
+refinement point. Instead the taxonomy is *discovered by clustering, named by the LLM, then
+frozen*:
+1. **Extract** all raw weakness/objection phrases from the free-text fields.
+2. **Embed** them — default local `nomic-embed-text` via `sentence-transformers` (offline, free);
+   optional `text-embedding-3-small` if an OpenAI key is preferred.
+3. **Cluster** — UMAP dimensionality reduction + HDBSCAN → candidate clusters (no fixed K).
+4. **Label (strong LLM)** — for each cluster, produce canonical `label`, `definition`, `aliases`,
+   `coaching_fix`. This is the only generative step and it's where a capable model earns its keep.
+5. **Human gate** — Taxonomy Studio review/approve (above).
+6. **Classify (cheap LLM, `gpt-4o-mini`)** — map every call to the *frozen* type IDs (multi-label)
+   with an evidence quote. Closed-set → cheap, stable, reproducible.
+
+- **LLM provider:** OpenRouter (OpenAI-compatible), model via `REP_PROFILE_MODEL`
+  (default `openai/gpt-4o-mini` for classify; a stronger model for the label step). Key: `OPENROUTER_API_KEY`.
+- **Validation:** JSON schema (required keys; scores/`frequency` in range); retry on invalid.
 
 ### Thin-data handling
-Reps below `min_scored_calls` get `data_confidence: thin`, numeric averages suppressed,
-narrative still attempted if any free-text exists.
+Default `min_scored_calls = 8`. Reps below it get `data_confidence: thin`, numeric averages
+suppressed (shown only with an explicit caveat), narrative still attempted if any free-text exists.
+
+### Runtime access (voice agent)
+The agent must answer *"top 3 weaknesses + suggested drills for rep X"* fast. `db.py` exposes
+`get_rep_drill_plan(slug)` → reads `rep_weakness_summary` (top 3) + `rep_persona_match_scores`
+(Spec 2) in one indexed query. No YAML parsing on the hot path; indexes on `reps.slug`,
+`rep_weakness_summary.rep_id`.
 
 ## Testing
 `pytest tests/test_cleaning.py` over pure functions:
@@ -213,9 +255,22 @@ narrative still attempted if any free-text exists.
 - `canonicalize_rep`: case/whitespace/spelling collisions collapse to one slug.
 - `aggregate_stats`: averages ignore missing; thin-data suppression below threshold.
 - DB round-trip: load → export query returns expected shape.
+- `get_rep_drill_plan` returns ≤3 weaknesses for a known rep.
 - LLM outputs validated by **schema**, not exact text.
 
+## Evaluation (profile quality rubric)
+`evaluate.py` scores each export so quality is measurable, not vibes:
+- **Evidence coverage** — % of `recurring_weaknesses` with ≥2 evidence quotes (target ≥80%).
+- **Coaching_fix completeness** — % of weakness types with a non-empty, non-generic `coaching_fix`.
+- **Classification coverage** — % of scored calls mapped to ≥1 weakness type (flag "unclustered" tail).
+- **Taxonomy health** — cluster count in a sane range; no giant catch-all cluster > X% of calls.
+Report printed at export and stored in `export_meta`.
+
+## Notes / non-blocking
+- **YAML size:** fine for 194 reps; revisit compaction/pagination only if profiles grow large.
+
 ## Open items (implementation-time)
-- `min_scored_calls` threshold.
-- Exact OpenRouter model.
+- `min_scored_calls` default set to 8 — confirm with the team.
+- Embedding provider: local `nomic-embed-text` (default) vs OpenAI `text-embedding-3-small`.
+- Label-step model on OpenRouter (classify is `gpt-4o-mini`).
 - Grade-band ordering — confirm it matches how the team reads the labels.
