@@ -366,3 +366,25 @@ def test_parse_classification_drops_unknown_ids_and_bad_handled():
     assert out["weakness_ids"] == [1]  # 99 dropped
     assert len(out["objections"]) == 1  # obj 88 dropped
     assert out["objections"][0]["handled"] == "poorly"
+
+
+def test_evaluate_profiles_metrics():
+    from cleaned_data import evaluate
+
+    profiles = [
+        {
+            "recurring_weaknesses": [
+                {"evidence": ["a", "b"], "coaching_fix": "probe"},
+                {"evidence": ["a"], "coaching_fix": ""},
+            ]
+        },
+        {"recurring_weaknesses": []},
+    ]
+    m = evaluate.evaluate_profiles(profiles)
+    assert m["n_profiles"] == 2
+    # 2 weaknesses total; 1 has >=2 evidence → 0.5
+    assert m["evidence_coverage"] == 0.5
+    # 1 of 2 has a non-empty coaching_fix → 0.5
+    assert m["coaching_fix_completeness"] == 0.5
+    # 1 of 2 profiles has >=1 weakness → 0.5
+    assert m["classification_coverage"] == 0.5
