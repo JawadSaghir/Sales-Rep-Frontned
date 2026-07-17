@@ -18,30 +18,6 @@ frontend/.env*
 transcripts/
 # Persisted per-rep scorecards (training output, keyed by rep_id)
 data/scorecards/
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
-
-# Virtual environments
-.venv
-worktrees/
-results/
-queue/
-
-# Agent prompt files (generated per-session by launchers)
-CLAUDE.md
-AGENTS.md
-
-# Experimental code/artifacts
-dev/
-
-# Results file
-results.tsv
-
 # Rep-trainer generated data / secrets (Task 14)
 cleaned_data/rep_trainer.db
 cleaned_data/rep_profiles/
