@@ -99,3 +99,25 @@ def canonicalize_rep(name: str, email: str) -> tuple[str, str, str]:
     email_lower = (email or "").strip().lower()
     slug = _SLUG_RE.sub("-", canonical_name.lower()).strip("-")
     return (canonical_name, email_lower, slug)
+
+
+_NUM_MARKER_RE = re.compile(r"\s*\d+[.)]\s*")
+
+
+def extract_objection_phrases(text: str) -> list[str]:
+    """Split a numbered-list narrative into individual phrases."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    parts = _NUM_MARKER_RE.split(text)
+    return [p.strip() for p in parts if len(p.strip()) >= 4]
+
+
+def pool_weakness_text(row: dict) -> str:
+    """Concatenate the weakness free-text fields into one blob for clustering."""
+    fields = ("what_to_improve", "why_no_close", "red_flags")
+    return " | ".join(
+        (row.get(f) or "").strip()
+        for f in fields
+        if (row.get(f) or "").strip()
+    )

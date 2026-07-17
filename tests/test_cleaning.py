@@ -1,10 +1,12 @@
 from cleaned_data.cleaning_utils import (
     canonicalize_rep,
+    extract_objection_phrases,
     has_numeric_score,
     is_real_call,
     normalize_grade,
     parse_close_ask,
     parse_no_show,
+    pool_weakness_text,
 )
 
 
@@ -96,3 +98,25 @@ def test_canonicalize_rep_collapses_variants():
 
 def test_canonicalize_rep_strips_punctuation():
     assert canonicalize_rep("O'Brien-Smith, Jr.", "")[2] == "o-brien-smith-jr"
+
+
+def test_extract_objection_phrases_splits_numbered_lists():
+    text = ("1. Budget/price too high for this year. 2) Wants to talk to advisors "
+            "first. 3) Decision feels rushed.")
+    phrases = extract_objection_phrases(text)
+    assert len(phrases) == 3
+    assert phrases[0].startswith("Budget/price")
+    assert "advisors" in phrases[1]
+
+
+def test_extract_objection_phrases_handles_empty_and_unnumbered():
+    assert extract_objection_phrases("") == []
+    assert extract_objection_phrases("Single objection, no numbering.") == [
+        "Single objection, no numbering."
+    ]
+
+
+def test_pool_weakness_text_joins_fields():
+    row = {"what_to_improve": "Probe stalls.", "why_no_close": "Accepted stall.",
+           "red_flags": ""}
+    assert pool_weakness_text(row) == "Probe stalls. | Accepted stall."
