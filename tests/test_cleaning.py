@@ -321,6 +321,10 @@ def test_build_profile_dict_unknown_slug_raises():
 
 
 def test_cluster_vectors_separates_two_blobs():
+    import pytest
+
+    pytest.importorskip("hdbscan")
+    pytest.importorskip("umap")
     import numpy as np
 
     rng = np.random.default_rng(0)
