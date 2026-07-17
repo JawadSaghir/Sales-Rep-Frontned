@@ -1,5 +1,6 @@
 from statistics import mean
 
+from cleaned_data import db
 from cleaned_data.cleaning_utils import (
     aggregate_stats,
     canonicalize_rep,
@@ -195,3 +196,48 @@ def test_aggregate_stats_ignores_non_numeric_total_score():
     assert s["avg_total_score"] is not None
     expected_avg = round(mean(40 + i for i in range(8)), 1)
     assert s["avg_total_score"] == expected_avg
+
+
+def test_schema_and_load_roundtrip():
+    conn = db.connect(":memory:")
+    db.create_schema(conn)
+    rid = db.upsert_rep(conn, "Mike Zanardelli", "mike.z@x.com", "mike-zanardelli")
+    rid2 = db.upsert_rep(conn, "Mike Zanardelli", "mike.z@x.com", "mike-zanardelli")
+    assert rid == rid2  # idempotent on slug
+    cid = db.insert_call(
+        conn,
+        rid,
+        {
+            "total_score": 47,
+            "grade_normalized": "developing",
+            "grade_raw": "Developing",
+            "close_ask": 1,
+            "has_numeric_score": 1,
+            "what_to_improve": "Probe stalls.",
+            "objections_surfaced": "1. Price. 2. Timing.",
+        },
+    )
+    assert isinstance(cid, int)
+    row = conn.execute(
+        "SELECT rep_id, total_score FROM calls WHERE call_id=?", (cid,)
+    ).fetchone()
+    assert row["rep_id"] == rid
+    assert row["total_score"] == 47
+    tables = {
+        r["name"]
+        for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    assert {
+        "reps",
+        "calls",
+        "objection_types",
+        "weakness_types",
+        "call_objections",
+        "call_weaknesses",
+        "export_meta",
+        "personas",
+        "persona_objections",
+        "rep_weakness_summary",
+        "team_weakness_ranking",
+        "rep_persona_match_scores",
+    } <= tables
