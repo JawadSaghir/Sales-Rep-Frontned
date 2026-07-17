@@ -5,7 +5,10 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from cleaned_data import DB_PATH
+import yaml
+
+from cleaned_data import DB_PATH, PROFILES_DIR
+from cleaned_data.cleaning_utils import aggregate_stats
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS reps(
@@ -109,3 +112,132 @@ def insert_call(conn: sqlite3.Connection, rep_id: int, fields: dict) -> int:
     )
     conn.commit()
     return cur.lastrowid
+
+
+def refresh_summary_tables(conn: sqlite3.Connection) -> None:
+    """Rebuild rep_weakness_summary and team_weakness_ranking from call_weaknesses."""
+    conn.execute("DELETE FROM rep_weakness_summary")
+    conn.execute("DELETE FROM team_weakness_ranking")
+    conn.execute("""
+      INSERT INTO rep_weakness_summary(rep_id, weak_id, frequency, last_seen)
+      SELECT c.rep_id, cw.weak_id,
+             CAST(COUNT(DISTINCT cw.call_id) AS REAL)
+               / (SELECT COUNT(*) FROM calls c2 WHERE c2.rep_id = c.rep_id),
+             MAX(c.call_date)
+      FROM call_weaknesses cw JOIN calls c ON c.call_id = cw.call_id
+      GROUP BY c.rep_id, cw.weak_id""")
+    conn.execute("""
+      INSERT INTO team_weakness_ranking(weak_id, rep_count, call_count)
+      SELECT cw.weak_id, COUNT(DISTINCT c.rep_id), COUNT(DISTINCT cw.call_id)
+      FROM call_weaknesses cw JOIN calls c ON c.call_id = cw.call_id
+      GROUP BY cw.weak_id""")
+    conn.commit()
+
+
+def get_rep_drill_plan(
+    conn: sqlite3.Connection, slug: str, top_n: int = 3
+) -> list[dict]:
+    """Top-N weaknesses for a rep, ordered by frequency desc."""
+    rows = conn.execute(
+        """
+      SELECT wt.weak_id, wt.label, rws.frequency, wt.coaching_fix
+      FROM rep_weakness_summary rws
+      JOIN reps r ON r.rep_id = rws.rep_id
+      JOIN weakness_types wt ON wt.weak_id = rws.weak_id
+      WHERE r.slug = ? ORDER BY rws.frequency DESC LIMIT ?""",
+        (slug, top_n),
+    )
+    return [dict(r) for r in rows]
+
+
+def _rep_calls(conn: sqlite3.Connection, rep_id: int) -> list[dict]:
+    """Fetch a rep's calls in the shape aggregate_stats expects."""
+    rows = conn.execute(
+        "SELECT total_score, grade_normalized AS grade, close_ask, call_date "
+        "FROM calls WHERE rep_id = ?",
+        (rep_id,),
+    ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["total_score"] = "" if d["total_score"] is None else str(d["total_score"])
+        d["did_rep_ask_for_close"] = {1: "yes", 0: "no"}.get(d.pop("close_ask"), "")
+        out.append(d)
+    return out
+
+
+def build_profile_dict(
+    conn: sqlite3.Connection, slug: str, min_scored_calls: int = 8
+) -> dict:
+    """Assemble the exported rep-profile shape for a single rep."""
+    rep = conn.execute(
+        "SELECT rep_id, name, email FROM reps WHERE slug=?", (slug,)
+    ).fetchone()
+    stats = aggregate_stats(_rep_calls(conn, rep["rep_id"]), min_scored_calls)
+    weaknesses = [
+        {
+            "weakness_type": r["label"],
+            "frequency": round(r["frequency"], 2),
+            "coaching_fix": r["coaching_fix"],
+            "evidence": [
+                q["evidence_quote"]
+                for q in conn.execute(
+                    "SELECT DISTINCT cw.evidence_quote FROM call_weaknesses cw "
+                    "JOIN calls c ON c.call_id=cw.call_id "
+                    "WHERE c.rep_id=? AND cw.weak_id=? "
+                    "AND cw.evidence_quote IS NOT NULL "
+                    "LIMIT 3",
+                    (rep["rep_id"], r["weak_id"]),
+                )
+            ],
+        }
+        for r in conn.execute(
+            """
+          SELECT wt.weak_id, wt.label, rws.frequency, wt.coaching_fix
+          FROM rep_weakness_summary rws JOIN weakness_types wt USING(weak_id)
+          WHERE rws.rep_id=? ORDER BY rws.frequency DESC""",
+            (rep["rep_id"],),
+        )
+    ]
+    strengths = [
+        r[0]
+        for r in conn.execute(
+            "SELECT DISTINCT biggest_strength FROM calls WHERE rep_id=? AND "
+            "biggest_strength IS NOT NULL AND biggest_strength != '' LIMIT 3",
+            (rep["rep_id"],),
+        )
+    ]
+    coach_notes = [
+        r[0]
+        for r in conn.execute(
+            "SELECT DISTINCT rudys_note FROM calls WHERE rep_id=? AND "
+            "rudys_note IS NOT NULL AND rudys_note != '' LIMIT 3",
+            (rep["rep_id"],),
+        )
+    ]
+    return {
+        "rep_name": rep["name"],
+        "rep_email": rep["email"],
+        "rep_slug": slug,
+        "stats": stats,
+        "recurring_weaknesses": weaknesses,
+        "strengths": strengths,
+        "coach_notes": coach_notes,
+    }
+
+
+def export_profiles(
+    conn: sqlite3.Connection,
+    out_dir: Path = PROFILES_DIR,
+    min_scored_calls: int = 8,
+) -> int:
+    """Write one <slug>.yaml profile per rep into out_dir; return the count."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    slugs = [r[0] for r in conn.execute("SELECT slug FROM reps")]
+    for slug in slugs:
+        prof = build_profile_dict(conn, slug, min_scored_calls)
+        (out_dir / f"{slug}.yaml").write_text(
+            yaml.safe_dump(prof, sort_keys=False, allow_unicode=True),
+            encoding="utf-8",
+        )
+    return len(slugs)

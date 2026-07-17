@@ -1,5 +1,7 @@
 from statistics import mean
 
+import yaml
+
 from cleaned_data import db
 from cleaned_data.cleaning_utils import (
     aggregate_stats,
@@ -241,3 +243,57 @@ def test_schema_and_load_roundtrip():
         "team_weakness_ranking",
         "rep_persona_match_scores",
     } <= tables
+
+
+def _seed_two_weaknesses(conn):
+    db.create_schema(conn)
+    rid = db.upsert_rep(conn, "Mike Zanardelli", "m@x.com", "mike-zanardelli")
+    conn.execute(
+        "INSERT INTO weakness_types(weak_id,label,definition,coaching_fix)"
+        " VALUES(1,'accepts-stalls','desc','Probe the stall.')"
+    )
+    for i in range(9):
+        cid = db.insert_call(
+            conn,
+            rid,
+            {
+                "total_score": 45 + i,
+                "grade_normalized": "developing",
+                "grade_raw": "Developing",
+                "close_ask": i % 2,
+                "has_numeric_score": 1,
+                "call_date": f"2026-01-0{i + 1}T10:00:00.000Z",
+                "biggest_strength": "Clean walkthrough.",
+                "rudys_note": "Behavioral gap.",
+                "what_to_improve": "Probe stalls.",
+            },
+        )
+        conn.execute(
+            "INSERT INTO call_weaknesses(call_id,weak_id,evidence_quote)"
+            " VALUES(?,1,'stall accepted')",
+            (cid,),
+        )
+    conn.commit()
+    return rid
+
+
+def test_summary_and_drill_plan():
+    conn = db.connect(":memory:")
+    _seed_two_weaknesses(conn)
+    db.refresh_summary_tables(conn)
+    plan = db.get_rep_drill_plan(conn, "mike-zanardelli", top_n=3)
+    assert plan and plan[0]["label"] == "accepts-stalls"
+    assert plan[0]["coaching_fix"] == "Probe the stall."
+
+
+def test_build_profile_dict_shape():
+    conn = db.connect(":memory:")
+    _seed_two_weaknesses(conn)
+    db.refresh_summary_tables(conn)
+    prof = db.build_profile_dict(conn, "mike-zanardelli")
+    assert prof["rep_slug"] == "mike-zanardelli"
+    assert prof["stats"]["data_confidence"] == "high"
+    assert prof["recurring_weaknesses"][0]["weakness_type"] == "accepts-stalls"
+    assert "strengths" in prof and "coach_notes" in prof
+    # round-trips as YAML
+    assert yaml.safe_load(yaml.safe_dump(prof))["rep_slug"] == "mike-zanardelli"
