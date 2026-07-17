@@ -7,17 +7,34 @@ whole module is trivially unit-testable.
 from __future__ import annotations
 
 import re
+from collections import Counter
+from statistics import mean
+
+from cleaned_data import GRADE_BANDS
 
 _GRADE_MAP: dict[str, str] = {
     # letter grades
-    "a+": "elite", "a": "elite", "a-": "strong",
-    "b+": "strong", "b": "good", "b-": "developing",
-    "c+": "developing", "c": "needs_improvement", "c-": "needs_improvement",
-    "d+": "needs_improvement", "d": "weak", "d-": "weak", "f": "weak",
+    "a+": "elite",
+    "a": "elite",
+    "a-": "strong",
+    "b+": "strong",
+    "b": "good",
+    "b-": "developing",
+    "c+": "developing",
+    "c": "needs_improvement",
+    "c-": "needs_improvement",
+    "d+": "needs_improvement",
+    "d": "weak",
+    "d-": "weak",
+    "f": "weak",
     # qualitative labels
-    "elite": "elite", "strong": "strong", "good": "good",
-    "developing": "developing", "needs improvement": "needs_improvement",
-    "needs work": "needs_improvement", "weak": "weak",
+    "elite": "elite",
+    "strong": "strong",
+    "good": "good",
+    "developing": "developing",
+    "needs improvement": "needs_improvement",
+    "needs work": "needs_improvement",
+    "weak": "weak",
 }
 
 
@@ -117,7 +134,53 @@ def pool_weakness_text(row: dict) -> str:
     """Concatenate the weakness free-text fields into one blob for clustering."""
     fields = ("what_to_improve", "why_no_close", "red_flags")
     return " | ".join(
-        (row.get(f) or "").strip()
-        for f in fields
-        if (row.get(f) or "").strip()
+        (row.get(f) or "").strip() for f in fields if (row.get(f) or "").strip()
     )
+
+
+def _trend(scored: list[dict]) -> str:
+    """Compare mean total_score of the older vs newer half, by call_date."""
+    dated = [c for c in scored if (c.get("call_date") or "").strip()]
+    if len(dated) < 4:
+        return "unknown"
+    dated.sort(key=lambda c: c["call_date"])
+    half = len(dated) // 2
+    first = mean(float(c["total_score"]) for c in dated[:half])
+    second = mean(float(c["total_score"]) for c in dated[half:])
+    if second - first > 2:
+        return "improving"
+    if first - second > 2:
+        return "declining"
+    return "flat"
+
+
+def aggregate_stats(calls: list[dict], min_scored_calls: int = 8) -> dict:
+    """Deterministic per-rep numeric rollup with thin-data suppression."""
+    scored = [c for c in calls if has_numeric_score(c)]
+    with_score = [c for c in scored if (c.get("total_score") or "").strip()]
+    bands = [b for b in (normalize_grade(c.get("grade", ""))[0] for c in scored) if b]
+    asks = [parse_close_ask(c.get("did_rep_ask_for_close", "")) for c in calls]
+    clean_asks = [a for a in asks if a is not None]
+
+    confidence = "high" if len(scored) >= min_scored_calls else "thin"
+    modal_band = (
+        max(Counter(bands), key=lambda b: (Counter(bands)[b], GRADE_BANDS.index(b)))
+        if bands
+        else None
+    )
+    avg = (
+        round(mean(float(c["total_score"]) for c in with_score), 1)
+        if with_score and confidence == "high"
+        else None
+    )
+    return {
+        "calls_with_narrative": len(calls),
+        "calls_with_numeric_score": len(scored),
+        "avg_total_score": avg,
+        "grade_normalized": modal_band,
+        "grade_trend": _trend(with_score) if confidence == "high" else "unknown",
+        "close_ask_rate": (
+            round(sum(clean_asks) / len(clean_asks), 2) if clean_asks else None
+        ),
+        "data_confidence": confidence,
+    }
