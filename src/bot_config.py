@@ -45,7 +45,11 @@ def build_bot_prompt(
     prompts_dir: Path = PROMPTS_DIR,
     template_name: str = "behavior_template.md",
 ) -> str:
-    """Compose a bot's layers and render the behavior template."""
+    """Compose a bot's layers and render the behavior template.
+
+    The template is loaded from `prompts_dir` if present there, else from the
+    canonical PROMPTS_DIR.
+    """
     bot = load_layer("bots", bot_slug, prompts_dir)
     persona = load_layer("personas", bot["persona"], prompts_dir)
     scenario = load_layer("scenarios", bot["scenario"], prompts_dir)
@@ -63,7 +67,8 @@ def build_bot_prompt(
     values["difficulty_framing"] = difficulty_framing(difficulty)
     values["character_name_upper"] = str(persona.get("character_name", "")).upper()
 
-    # The template is a shared, non-per-bot asset: always load it from the
-    # canonical PROMPTS_DIR, not the (possibly overridden) layer prompts_dir.
-    template = (Path(PROMPTS_DIR) / template_name).read_text(encoding="utf-8")
+    template_path = Path(prompts_dir) / template_name
+    if not template_path.exists():
+        template_path = Path(PROMPTS_DIR) / template_name
+    template = template_path.read_text(encoding="utf-8")
     return render_prompt(template, values)
