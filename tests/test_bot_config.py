@@ -1,4 +1,8 @@
-from src import bot_config, bot_extract
+import json
+
+import pytest
+
+from src import bot_config, bot_enrich, bot_extract
 from src.personas import PROMPTS_DIR
 
 
@@ -185,3 +189,27 @@ def test_validate_scorecard_rejects_bad_weights_and_keys():
         bot_config.validate_scorecard(
             {"criteria": [{"key": "not_a_real_column", "weight": 1.0}]}
         )
+
+
+def test_parse_enrichment_valid():
+    content = json.dumps({
+        "speech_style_description": "warm, direct",
+        "signature_phrases": ["you know?"],
+        "character_core_motivation": "prove she's legit",
+        "baseline_tone": "guarded",
+        "shutdown_line": "I'm done here.",
+        "character_backstory": "solo cosmetologist for 6 years",
+        "example_lines": {"trust": ["how do I know this works?"], "timing": ["not now"]},
+    })
+    out = bot_enrich.parse_enrichment(content, ["trust", "timing"])
+    assert out["speech_style_description"] == "warm, direct"
+    assert out["example_lines"]["trust"] == ["how do I know this works?"]
+
+
+def test_parse_enrichment_missing_objection_lines_raises():
+    content = json.dumps(
+        dict.fromkeys(bot_enrich.ENRICH_KEYS, "x")
+        | {"signature_phrases": ["a"], "example_lines": {"trust": ["q"]}}
+    )
+    with pytest.raises(ValueError):
+        bot_enrich.parse_enrichment(content, ["trust", "timing"])  # 'timing' missing
