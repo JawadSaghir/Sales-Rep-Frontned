@@ -192,15 +192,20 @@ def test_validate_scorecard_rejects_bad_weights_and_keys():
 
 
 def test_parse_enrichment_valid():
-    content = json.dumps({
-        "speech_style_description": "warm, direct",
-        "signature_phrases": ["you know?"],
-        "character_core_motivation": "prove she's legit",
-        "baseline_tone": "guarded",
-        "shutdown_line": "I'm done here.",
-        "character_backstory": "solo cosmetologist for 6 years",
-        "example_lines": {"trust": ["how do I know this works?"], "timing": ["not now"]},
-    })
+    content = json.dumps(
+        {
+            "speech_style_description": "warm, direct",
+            "signature_phrases": ["you know?"],
+            "character_core_motivation": "prove she's legit",
+            "baseline_tone": "guarded",
+            "shutdown_line": "I'm done here.",
+            "character_backstory": "solo cosmetologist for 6 years",
+            "example_lines": {
+                "trust": ["how do I know this works?"],
+                "timing": ["not now"],
+            },
+        }
+    )
     out = bot_enrich.parse_enrichment(content, ["trust", "timing"])
     assert out["speech_style_description"] == "warm, direct"
     assert out["example_lines"]["trust"] == ["how do I know this works?"]
@@ -213,3 +218,14 @@ def test_parse_enrichment_missing_objection_lines_raises():
     )
     with pytest.raises(ValueError):
         bot_enrich.parse_enrichment(content, ["trust", "timing"])  # 'timing' missing
+
+
+DEMO_SLUG = "april-alvarado-closing"  # real slug produced by scripts/build_demo_bots.py
+
+
+def test_demo_bot_renders_end_to_end():
+    prompt = bot_config.build_bot_prompt(DEMO_SLUG)
+    assert "{{" not in prompt  # every placeholder filled
+    assert "TODO-from-transcript" not in prompt  # voice fields really filled
+    sc = bot_config.load_scorecard("closing_v1")
+    bot_config.validate_scorecard(sc)

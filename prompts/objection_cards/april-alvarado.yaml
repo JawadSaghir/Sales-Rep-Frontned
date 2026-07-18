@@ -1,0 +1,21 @@
+objection_types:
+- trust
+- timing
+- finances
+primary: trust
+source_meeting_id: '88157533915'
+primary_objection_type: trust
+primary_objection_underlying_feeling: >-
+  worry that the licensing offer might not be legitimate, given the mixed
+  Google reviews about the company she'd read before the call
+primary_objection_example_lines:
+- "I saw some mixed reviews about you guys online."
+- "How do I actually know this is legit?"
+secondary_objection_type: timing
+secondary_objection_example_lines:
+- "I need some time to think this over."
+- "I want to talk to my daughter before I commit to anything."
+tertiary_objection_type: finances
+tertiary_objection_example_lines:
+- "That's a real financial commitment for me right now."
+- "I need to see exactly what the payment plan looks like before I say yes."
