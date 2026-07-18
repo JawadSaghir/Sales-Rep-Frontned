@@ -157,7 +157,9 @@ def test_row_to_layers_maps_real_fields():
 
 
 def test_row_to_layers_slugs_multiword_objections():
-    row = dict(_REAL_ROW, **{"Objection/Friction": "Business Fit, Personality Fit ,Trust"})
+    row = dict(
+        _REAL_ROW, **{"Objection/Friction": "Business Fit, Personality Fit ,Trust"}
+    )
     o = bot_extract.row_to_layers(row)["objection_card"]
     assert o["objection_types"] == ["business_fit", "personality_fit", "trust"]
     assert o["primary"] == "business_fit"
