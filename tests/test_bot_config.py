@@ -1,4 +1,4 @@
-from src import bot_config
+from src import bot_config, bot_extract
 from src.personas import PROMPTS_DIR
 
 
@@ -107,3 +107,50 @@ def test_build_bot_prompt_missing_layer_raises(tmp_path):
     (tmp_path / "personas" / "p.yaml").unlink()
     with pytest.raises(FileNotFoundError):
         bot_config.build_bot_prompt("b", prompts_dir=tmp_path)
+
+
+_REAL_ROW = {
+    "Meeting ID": "rec123",
+    "Client Name": "April Alvarado",
+    "Business name": "April's Beauty Bar",
+    "Indusrtry": "Wellness/Beauty",
+    "Sub-industry": "Cosmetology / Nail & Beauty Services",
+    "Objection/Friction": "Trust,Timing,Finances",
+    "Buying Authority": "No",
+    "Motivation": "Credibility/Authority,Brand Narrative,Growth/ROI",
+    "Business Stage": "Solo home-based cosmetologist in Denver planning brick-and-mortar.",
+    "Package Discussed": "Light,Standard,VIP",
+    "Call Disposition": "Scheduled Follow-Up",
+}
+
+
+def test_clean_and_split():
+    assert bot_extract.clean("None") == ""
+    assert bot_extract.clean("Unknown") == ""
+    assert bot_extract.clean("  Wellness ") == "Wellness"
+    assert bot_extract.split_list("Trust, Timing ,Finances") == [
+        "Trust",
+        "Timing",
+        "Finances",
+    ]
+    assert bot_extract.split_list("None") == []
+
+
+def test_row_to_layers_maps_real_fields():
+    out = bot_extract.row_to_layers(_REAL_ROW)
+    p, s, o = out["persona"], out["scenario"], out["objection_card"]
+    assert p["character_name"] == "April Alvarado"
+    assert p["business_name"] == "April's Beauty Bar"
+    assert p["industry"] == "Wellness/Beauty"
+    assert p["buying_authority"] is False
+    assert p["motivations"] == [
+        "credibility_authority",
+        "brand_narrative",
+        "growth_roi",
+    ]
+    assert s["situation"].startswith("Solo home-based")
+    assert s["offer_on_table"] == ["Light", "Standard", "VIP"]
+    assert s["disposition_context"] == "Scheduled Follow-Up"
+    assert o["objection_types"] == ["trust", "timing", "finances"]
+    assert o["primary"] == "trust"
+    assert p["source_meeting_id"] == "rec123"
