@@ -161,3 +161,25 @@ def test_row_to_layers_slugs_multiword_objections():
     o = bot_extract.row_to_layers(row)["objection_card"]
     assert o["objection_types"] == ["business_fit", "personality_fit", "trust"]
     assert o["primary"] == "business_fit"
+
+
+def test_scorecard_loads_and_validates():
+    sc = bot_config.load_scorecard("closing_v1")
+    bot_config.validate_scorecard(sc)  # must not raise
+    total = sum(c["weight"] for c in sc["criteria"])
+    assert abs(total - 1.0) < 1e-6
+    for c in sc["criteria"]:
+        assert c["key"] in bot_config.REAL_SCORE_COLUMNS
+
+
+def test_validate_scorecard_rejects_bad_weights_and_keys():
+    import pytest
+
+    with pytest.raises(ValueError):
+        bot_config.validate_scorecard(
+            {"criteria": [{"key": "objection_handling", "weight": 0.5}]}
+        )  # sums to 0.5
+    with pytest.raises(ValueError):
+        bot_config.validate_scorecard(
+            {"criteria": [{"key": "not_a_real_column", "weight": 1.0}]}
+        )

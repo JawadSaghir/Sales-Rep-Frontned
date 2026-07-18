@@ -16,6 +16,17 @@ LAYER_DIRS: dict[str, str] = {
     "bots": "bots",
 }
 
+REAL_SCORE_COLUMNS: frozenset[str] = frozenset(
+    {
+        "objection_handling",
+        "close_mechanics",
+        "frame_and_control",
+        "prospect_read",
+        "did_rep_ask_for_close",
+        "self_assessment_accuracy",
+    }
+)
+
 
 def load_layer(kind: str, slug: str, prompts_dir: Path = PROMPTS_DIR) -> dict:
     """Load one config layer YAML by kind + slug."""
@@ -72,3 +83,23 @@ def build_bot_prompt(
         template_path = Path(PROMPTS_DIR) / template_name
     template = template_path.read_text(encoding="utf-8")
     return render_prompt(template, values)
+
+
+def load_scorecard(name: str, prompts_dir: Path = PROMPTS_DIR) -> dict:
+    """Load a scorecard configuration by name."""
+    return load_layer("scorecards", name, prompts_dir)
+
+
+def validate_scorecard(sc: dict) -> None:
+    """Validate that scorecard weights sum to 1.0 and all keys are real columns.
+
+    Raises ValueError if weights don't sum to ~1.0 (abs diff > 1e-6) or if any
+    key is not in REAL_SCORE_COLUMNS.
+    """
+    criteria = sc.get("criteria", [])
+    total = sum(c["weight"] for c in criteria)
+    if abs(total - 1.0) > 1e-6:
+        raise ValueError(f"scorecard weights sum to {total}, expected 1.0")
+    for c in criteria:
+        if c["key"] not in REAL_SCORE_COLUMNS:
+            raise ValueError(f"scorecard key {c['key']!r} is not a real corpus column")
