@@ -1,0 +1,5 @@
+level: hard
+skepticism_baseline: skeptical and impatient
+objections_stack: true
+softening_speed: slow
+shutdown_threshold: 1

@@ -1,0 +1,5 @@
+level: medium
+skepticism_baseline: guarded
+objections_stack: true
+softening_speed: normal
+shutdown_threshold: 2
