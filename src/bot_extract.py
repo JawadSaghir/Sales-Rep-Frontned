@@ -8,8 +8,6 @@ from __future__ import annotations
 
 _EMPTY = {"", "none", "unknown", "n/a"}
 
-MOTIVATION_SLUGS: dict[str, str] = {}  # built by _slug; kept for reference/reverse
-
 
 def clean(value: str) -> str:
     v = (value or "").strip()
@@ -27,7 +25,7 @@ def _slug(label: str) -> str:
 def row_to_layers(row: dict) -> dict:
     """Map one CSV row to persona/scenario/objection_card dicts (structured fields)."""
     mid = clean(row.get("Meeting ID"))
-    objections = [t.lower() for t in split_list(row.get("Objection/Friction"))]
+    objections = [_slug(t) for t in split_list(row.get("Objection/Friction"))]
     persona = {
         "character_name": clean(row.get("Client Name")),
         "business_name": clean(row.get("Business name")),
