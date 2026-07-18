@@ -1,4 +1,3 @@
-
 from src import bot_config
 from src.personas import PROMPTS_DIR
 
