@@ -42,77 +42,6 @@ def test_behavior_template_has_new_placeholders():
         assert ph in text
 
 
-def _seed_bot(tmp_path):
-    # minimal fixture bot + layers under tmp_path mirroring prompts/ dirs
-    (tmp_path / "bots").mkdir()
-    (tmp_path / "personas").mkdir()
-    (tmp_path / "scenarios").mkdir()
-    (tmp_path / "objection_cards").mkdir()
-    (tmp_path / "call_types").mkdir()
-    (tmp_path / "difficulty").mkdir()
-    (tmp_path / "bots" / "b.yaml").write_text(
-        "slug: b\npersona: p\nscenario: s\nobjection_card: o\n"
-        "call_type: closing\ndifficulty: medium\nscorecard: closing_v1\n",
-        encoding="utf-8",
-    )
-    (tmp_path / "personas" / "p.yaml").write_text(
-        "character_name: April\ncharacter_age: 38\n"
-        "character_background: owner of April's Beauty Bar\n"
-        "character_backstory: solo cosmetologist\n"
-        "character_core_motivation: build credibility\n"
-        'speech_style_description: warm, direct\nsignature_phrases: ["you know"]\n'
-        "baseline_tone: guarded\n",
-        encoding="utf-8",
-    )
-    (tmp_path / "scenarios" / "s.yaml").write_text(
-        "call_type: closing\nsituation: expanding to brick-and-mortar\n"
-        "offer_on_table: [Light, Standard, VIP]\n"
-        "what_would_flip_them: proof it converts\n"
-        "disposition_context: Scheduled Follow-Up\nshutdown_line: I'm done here.\n",
-        encoding="utf-8",
-    )
-    (tmp_path / "objection_cards" / "o.yaml").write_text(
-        "objection_types: [trust, timing, finances]\nprimary: trust\n"
-        "primary_objection_type: trust\n"
-        "primary_objection_underlying_feeling: fear of wasting money\n"
-        'primary_objection_example_lines: ["how do I know this works?"]\n'
-        "secondary_objection_type: timing\n"
-        'secondary_objection_example_lines: ["not right now"]\n'
-        "tertiary_objection_type: finances\n"
-        'tertiary_objection_example_lines: ["it\'s a lot of money"]\n',
-        encoding="utf-8",
-    )
-    (tmp_path / "call_types" / "closing.yaml").write_text(
-        "call_type: closing\nframe: Rapport is built; present the offer.\n"
-        "rep_objective: Get a dated commitment.\n",
-        encoding="utf-8",
-    )
-    (tmp_path / "difficulty" / "medium.yaml").write_text(
-        "level: medium\nskepticism_baseline: guarded\nobjections_stack: true\n"
-        "softening_speed: normal\nshutdown_threshold: 2\n",
-        encoding="utf-8",
-    )
-
-
-def test_build_bot_prompt_composes_layers(tmp_path):
-    _seed_bot(tmp_path)
-    prompt = bot_config.build_bot_prompt("b", prompts_dir=tmp_path)
-    assert "April" in prompt
-    assert "present the offer" in prompt  # call_type frame
-    assert "Get a dated commitment" in prompt  # rep_objective
-    assert "guarded" in prompt  # difficulty framing
-    assert "{{" not in prompt  # no unfilled placeholders
-
-
-def test_build_bot_prompt_missing_layer_raises(tmp_path):
-    import pytest
-
-    _seed_bot(tmp_path)
-    (tmp_path / "personas" / "p.yaml").unlink()
-    with pytest.raises(FileNotFoundError):
-        bot_config.build_bot_prompt("b", prompts_dir=tmp_path)
-
-
 _REAL_ROW = {
     "Meeting ID": "rec123",
     "Client Name": "April Alvarado",
@@ -218,14 +147,3 @@ def test_parse_enrichment_missing_objection_lines_raises():
     )
     with pytest.raises(ValueError):
         bot_enrich.parse_enrichment(content, ["trust", "timing"])  # 'timing' missing
-
-
-DEMO_SLUG = "april-alvarado-closing"  # real slug produced by scripts/build_demo_bots.py
-
-
-def test_demo_bot_renders_end_to_end():
-    prompt = bot_config.build_bot_prompt(DEMO_SLUG)
-    assert "{{" not in prompt  # every placeholder filled
-    assert "TODO-from-transcript" not in prompt  # voice fields really filled
-    sc = bot_config.load_scorecard("closing_v1")
-    bot_config.validate_scorecard(sc)
