@@ -156,3 +156,25 @@ def test_validate_rejects_missing_persona_name():
     bad = dataclasses.replace(ctx, persona=dataclasses.replace(ctx.persona, name=""))
     with pytest.raises(validator.ValidationError):
         validator.validate(bad)
+
+
+def test_render_buyer_canonical_order_and_content():
+    from context import renderer
+    out = renderer.render_buyer(_ctx())
+    # canonical order: SYSTEM before POLICY before DIFFICULTY before PERSONA
+    assert out.index("# SYSTEM") < out.index("# CONVERSATION POLICY") \
+        < out.index("# DIFFICULTY") < out.index("# WHO YOU ARE")
+    assert "April Alvarado" in out                 # persona
+    assert "skeptical" in out                       # difficulty framing
+    assert "mixed reviews" in out.lower()           # objection buyer_language
+    assert "{{" not in out                          # no unfilled placeholders
+    # evaluation / state / memory never leak into the buyer prompt
+    assert "scorecard" not in out.lower() and "criteria" not in out.lower()
+
+
+def test_render_evaluator_has_criteria_and_is_separate():
+    from context import renderer
+    ctx = _ctx()
+    ev = renderer.render_evaluator(ctx)
+    assert "closing_v1" in ev
+    assert ev != renderer.render_buyer(ctx)
