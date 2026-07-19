@@ -107,3 +107,17 @@ def test_reps_endpoints(tmp_path, monkeypatch):
     assert c.get("/api/reps/adam-pellegrino").json()["data"]["name"] == "Adam Pellegrino"
     assert c.get("/api/reps/nobody").status_code == 404
     assert c.get("/api/reps/adam-pellegrino/drill-plan").json()["data"][0]["focus"]
+
+
+def test_team_ranking():
+    from api import objection_store
+
+    rows = [
+        {"objection_type": "Legal/Contract"},
+        {"objection_type": "Price"},
+        {"objection_type": "Price"},
+        {"objection_type": ""},
+    ]
+    ranking = objection_store.team_ranking(rows)
+    assert ranking[0] == {"objection_type": "Price", "count": 2}
+    assert all(r["objection_type"] for r in ranking)  # blanks dropped
