@@ -1,5 +1,6 @@
 from dataclasses import FrozenInstanceError
 
+from context import loaders
 from context import models as m
 
 
@@ -37,3 +38,31 @@ def test_objection_pack_primary_and_ids():
     assert pack.primary is c1
     assert pack.card_ids == ("trust", "timing")
     assert m.ObjectionPack(cards=()).primary is None
+
+
+def test_load_difficulty_and_meta(tmp_path):
+    p = tmp_path / "hard.yaml"
+    p.write_text("id: hard\nversion: 2\npriority: 60\nlevel: hard\n"
+                 "framing: You are skeptical and interrupt weak answers.\n", encoding="utf-8")
+    d = loaders.load_difficulty(p)
+    assert d.level == "hard" and d.meta.version == 2 and d.meta.priority == 60
+    assert "skeptical" in d.framing
+
+
+def test_load_objection_card(tmp_path):
+    p = tmp_path / "trust.yaml"
+    p.write_text(
+        "id: trust\ntrigger: burned before\nemotion: guarded\n"
+        "buyer_language:\n  - How do I know this works?\n"
+        "acceptable_resolution: proof\ncoach_signal: acknowledged then evidence\n",
+        encoding="utf-8")
+    c = loaders.load_objection_card(p)
+    assert c.meta.id == "trust" and c.buyer_language == ("How do I know this works?",)
+
+
+def test_loader_rejects_missing_required_field(tmp_path):
+    import pytest
+    p = tmp_path / "bad.yaml"
+    p.write_text("id: x\nlevel: hard\n", encoding="utf-8")  # missing 'framing'
+    with pytest.raises(loaders.LoaderError):
+        loaders.load_difficulty(p)
