@@ -1,3 +1,6 @@
+import csv as _csv
+from importlib import reload
+
 from fastapi.testclient import TestClient
 
 from api import rep_store
@@ -75,3 +78,32 @@ def test_rep_profile_and_drill_plan():
     assert rep_store.rep_profile(_ROWS, "nobody") is None
     plan = rep_store.rep_drill_plan(_ROWS, "adam-pellegrino")
     assert plan and "focus" in plan[0] and "coaching_tip" in plan[0]
+
+
+def _write_rep_csv(path):
+    cols = ["rep_name", "grade", "total_score", "no_show", "what_to_improve",
+            "coaching_tip", "why_no_close", "biggest_strength", "objections_surfaced"]
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        w = _csv.DictWriter(f, fieldnames=cols)
+        w.writeheader()
+        w.writerow({"rep_name": "Adam Pellegrino", "grade": "B", "total_score": "70",
+                    "no_show": "no", "what_to_improve": "Anchor price sooner.",
+                    "coaching_tip": "Same-day savings.", "why_no_close": "Logistics.",
+                    "biggest_strength": "Value walk.", "objections_surfaced": "Contract."})
+
+
+def test_reps_endpoints(tmp_path, monkeypatch):
+    csv_path = tmp_path / "rep.csv"
+    _write_rep_csv(csv_path)
+    monkeypatch.setenv("REP_CSV", str(csv_path))
+    from api import main as m
+    from api import settings as s
+
+    reload(s)
+    reload(m)
+    c = TestClient(m.app)
+    reps = c.get("/api/reps").json()["data"]
+    assert any(r["slug"] == "adam-pellegrino" for r in reps)
+    assert c.get("/api/reps/adam-pellegrino").json()["data"]["name"] == "Adam Pellegrino"
+    assert c.get("/api/reps/nobody").status_code == 404
+    assert c.get("/api/reps/adam-pellegrino/drill-plan").json()["data"][0]["focus"]

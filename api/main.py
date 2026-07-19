@@ -28,6 +28,7 @@ def health() -> dict:
     return ok({"status": "ok"})
 
 
-from api.routers import catalog  # noqa: E402
+from api.routers import catalog, reps  # noqa: E402
 
 app.include_router(catalog.router)
+app.include_router(reps.router)
