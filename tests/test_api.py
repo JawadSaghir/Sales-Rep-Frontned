@@ -121,3 +121,62 @@ def test_team_ranking():
     ranking = objection_store.team_ranking(rows)
     assert ranking[0] == {"objection_type": "Price", "count": 2}
     assert all(r["objection_type"] for r in ranking)  # blanks dropped
+
+
+def test_build_room_metadata_is_json():
+    import json
+
+    from api import livekit_session
+
+    md = livekit_session.build_room_metadata(
+        "s1", "adam-pellegrino", "april-alvarado-closing", "medium"
+    )
+    assert json.loads(md) == {
+        "session_id": "s1",
+        "rep_slug": "adam-pellegrino",
+        "bot_slug": "april-alvarado-closing",
+        "difficulty": "medium",
+    }
+
+
+def test_post_session_happy_and_validation(tmp_path, monkeypatch):
+    monkeypatch.setenv("SESSIONS_DB", str(tmp_path / "s.db"))
+    from importlib import reload
+
+    from api import livekit_session
+    from api import main as m
+    from api import settings as s
+
+    reload(s)
+    reload(m)
+    monkeypatch.setattr(livekit_session, "mint_token", lambda *a, **k: "tok_123")
+
+    async def _fake_create_room(*a, **k):
+        return None
+
+    monkeypatch.setattr(livekit_session, "create_room", _fake_create_room)
+    c = TestClient(m.app)
+    good = c.post(
+        "/api/sessions",
+        json={
+            "rep_slug": "adam-pellegrino",
+            "call_type": "closing",
+            "persona_slug": "april-alvarado-closing",
+            "difficulty": "medium",
+        },
+    )
+    assert good.status_code == 200
+    sid = good.json()["data"]["session_id"]
+    assert good.json()["data"]["token"] == "tok_123"
+    assert c.get(f"/api/sessions/{sid}").json()["data"]["status"] == "created"
+    bad = c.post(
+        "/api/sessions",
+        json={
+            "rep_slug": "x",
+            "call_type": "nope",
+            "persona_slug": "april-alvarado-closing",
+            "difficulty": "medium",
+        },
+    )
+    assert bad.status_code == 400
+    assert c.get("/api/sessions/nonexistent").status_code == 404
