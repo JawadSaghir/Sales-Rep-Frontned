@@ -18,7 +18,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.exception_handler(HTTPException)
 async def http_exc_handler(_: Request, exc: HTTPException) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content=fail(str(exc.detail)))
@@ -27,3 +26,8 @@ async def http_exc_handler(_: Request, exc: HTTPException) -> JSONResponse:
 @app.get("/api/health")
 def health() -> dict:
     return ok({"status": "ok"})
+
+
+from api.routers import catalog  # noqa: E402
+
+app.include_router(catalog.router)

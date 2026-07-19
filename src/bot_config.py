@@ -35,6 +35,16 @@ def load_layer(kind: str, slug: str, prompts_dir: Path = PROMPTS_DIR) -> dict:
     return _load_yaml(Path(prompts_dir) / LAYER_DIRS[kind] / f"{slug}.yaml")
 
 
+def list_layer_slugs(kind: str, prompts_dir: Path = PROMPTS_DIR) -> list[str]:
+    """List available slugs (YAML stems) for a layer kind, sorted."""
+    if kind not in LAYER_DIRS:
+        raise KeyError(f"unknown layer kind: {kind!r}")
+    d = Path(prompts_dir) / LAYER_DIRS[kind]
+    if not d.is_dir():
+        return []
+    return sorted(p.stem for p in d.glob("*.yaml"))
+
+
 def difficulty_framing(difficulty: dict) -> str:
     """Render the difficulty layer into a short natural-language frame."""
     return (
