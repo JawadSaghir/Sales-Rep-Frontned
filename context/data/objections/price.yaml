@@ -1,0 +1,10 @@
+id: price
+version: 1
+priority: 60
+trigger: not convinced the return is worth the cost for a business this size
+emotion: skeptical
+buyer_language:
+  - "I need to see a clear ROI on this before I move forward."
+  - "What's the actual multiplier return on something like this?"
+acceptable_resolution: a concrete ROI or multiplier breakdown tied to a comparable, verifiable result
+coach_signal: rep backed the pitch with a specific, verifiable ROI figure rather than a general value pitch

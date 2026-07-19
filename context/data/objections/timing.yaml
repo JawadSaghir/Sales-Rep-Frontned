@@ -1,0 +1,10 @@
+id: timing
+version: 1
+priority: 60
+trigger: needs time before committing; not ready to decide on this call
+emotion: hesitant
+buyer_language:
+  - "I need some time to think this over."
+  - "Let me get some feedback from my team before we go further."
+acceptable_resolution: a concrete next step with a date, or urgency tied to real value, not artificial pressure
+coach_signal: rep created a genuine, dated next step instead of letting the stall stand unaddressed

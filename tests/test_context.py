@@ -1,6 +1,6 @@
 from dataclasses import FrozenInstanceError
 
-from context import loaders
+from context import CONTEXT_DATA, loaders
 from context import models as m
 
 
@@ -74,3 +74,22 @@ def test_load_scorecard_requires_criteria(tmp_path):
     p.write_text("id: sc\nname: closing_v1\n", encoding="utf-8")  # no criteria
     with pytest.raises(loaders.LoaderError):
         loaders.load_scorecard(p)
+
+
+def test_real_content_loads():
+    d = CONTEXT_DATA
+    sys_ = loaders.load_system(d / "system" / "system.yaml")
+    assert sys_.rules and "character" in " ".join(sys_.rules).lower()
+    loaders.load_policy(d / "policy" / "conversation.yaml")
+    p = loaders.load_persona(d / "personas" / "april-alvarado.yaml")
+    assert p.name and p.company_id
+    loaders.load_company(d / "companies" / f"{p.company_id}.yaml")
+    for level in ["easy", "medium", "hard"]:
+        assert loaders.load_difficulty(d / "difficulty" / f"{level}.yaml").framing
+    for ct in ["closing", "discovery", "follow_up"]:
+        loaders.load_call_type(d / "call_types" / f"{ct}.yaml")
+    for oid in ["trust", "timing", "finances"]:
+        assert loaders.load_objection_card(d / "objections" / f"{oid}.yaml").buyer_language
+    loaders.load_scorecard(d / "scorecards" / "closing_v1.yaml")
+    sc = loaders.load_scenario(d / "scenarios" / "april-alvarado.yaml")
+    assert sc.default_objection_ids  # scenario names its default objections

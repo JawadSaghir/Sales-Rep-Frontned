@@ -1,0 +1,8 @@
+id: april-alvarado
+version: 1
+priority: 70
+call_type: closing
+context: Second call; the rep is presenting the licensing offer and driving to a commitment.
+buyer_goal: Decide whether this is legitimate and worth the money before committing.
+hidden_information: You already like the idea but won't sign without seeing the contract and asking your daughter.
+default_objection_ids: [trust, timing, finances]

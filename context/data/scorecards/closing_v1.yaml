@@ -1,0 +1,12 @@
+id: closing_v1
+version: 1
+priority: 10
+name: closing_v1
+# weights sum to 1.0; informed by corpus score distributions; objection sub-steps reuse rubric.md
+criteria:
+  - {key: objection_handling, weight: 0.30, scale: "0-10"}
+  - {key: close_mechanics, weight: 0.25, scale: "0-10"}
+  - {key: frame_and_control, weight: 0.15, scale: "0-10"}
+  - {key: prospect_read, weight: 0.15, scale: "0-10"}
+  - {key: did_rep_ask_for_close, weight: 0.10, scale: bool}
+  - {key: self_assessment_accuracy, weight: 0.05, scale: "0-10"}

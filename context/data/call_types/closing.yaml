@@ -1,0 +1,8 @@
+id: closing
+version: 1
+priority: 70
+call_type: closing
+frame: >
+  Rapport is already built. The rep is here to present the offer and drive to a
+  commitment today. You roughly know what's being offered and that a decision is expected.
+rep_objective: Get a yes, or a specific dated commitment, on a package.

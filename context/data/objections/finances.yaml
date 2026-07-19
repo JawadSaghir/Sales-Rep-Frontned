@@ -1,0 +1,12 @@
+id: finances
+version: 1
+priority: 60
+trigger: real financial commitment relative to the size of the business; wants exact payment terms before agreeing
+emotion: cautious
+buyer_language:
+  - "That's a real financial commitment for me right now."
+  - "I need to see exactly what the payment plan looks like before I say yes."
+  - "That's a real financial commitment for a business my size."
+  - "I want to see the numbers in writing before I commit any money."
+acceptable_resolution: a clear, written payment plan or financing structure that fits the size of the business
+coach_signal: rep addressed the concern with concrete payment-plan specifics, not vague reassurance
