@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from context import CONTEXT_DATA, loaders
 from context import models as m
 
 _OMITTED = ("knowledge", "state", "memory")
+
+# Layer ids become file paths, and several flow from untrusted room metadata
+# (persona/scenario/difficulty/call_type/scorecard/objection ids). Constrain
+# them to a safe charset so a value like "../scorecards/closing_v1" cannot
+# escape the data dir and load an unintended YAML into the buyer prompt.
+_VALID_ID = re.compile(r"[a-z0-9_-]+")
 
 
 class AssembleError(FileNotFoundError):
@@ -25,6 +32,8 @@ def merge_objection_ids(default: tuple[str, ...], add: tuple[str, ...],
 
 
 def _path(data_dir: Path, kind: str, name: str) -> Path:
+    if not _VALID_ID.fullmatch(name):
+        raise AssembleError(f"invalid layer id {name!r} for {kind}")
     p = data_dir / kind / f"{name}.yaml"
     if not p.is_file():
         raise AssembleError(f"missing context layer: {kind}/{name}.yaml")

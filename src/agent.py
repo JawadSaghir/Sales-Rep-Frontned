@@ -443,7 +443,10 @@ async def my_agent(ctx: JobContext):
     # --- Training assets: prospect card, rubric, retriever, scorer, coach ---
     # `context` is a repo-root package; make it importable when this file is
     # run directly (`uv run src/agent.py dev` puts only src/ on sys.path).
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    # Guard the insert so the long-running worker doesn't grow sys.path per call.
+    _repo_root = str(Path(__file__).resolve().parent.parent)
+    if _repo_root not in sys.path:
+        sys.path.insert(0, _repo_root)
     from context.assembler import assemble
     from context.renderer import render_buyer
     from context.selection import DEFAULT_SELECTION, selection_from_metadata

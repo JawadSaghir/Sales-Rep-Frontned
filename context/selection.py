@@ -6,6 +6,17 @@ import json
 
 from context.models import Selection
 
+
+def _id_list(value: object) -> tuple[str, ...]:
+    """Coerce a JSON value into a tuple of id strings; ignore non-list values.
+
+    A bare string (e.g. ``"authority"``) would otherwise ``tuple()`` into
+    per-character ids, so only genuine lists/tuples are accepted.
+    """
+    if isinstance(value, (list, tuple)):
+        return tuple(str(x) for x in value)
+    return ()
+
 DEFAULT_SELECTION = Selection(
     persona_id="april-alvarado",
     scenario_id="april-alvarado",
@@ -31,6 +42,6 @@ def selection_from_metadata(metadata: str | None, *, fallback: Selection) -> Sel
         call_type=str(d.get("call_type", fallback.call_type)),
         difficulty=str(d.get("difficulty", fallback.difficulty)),
         scorecard=str(d.get("scorecard", fallback.scorecard)),
-        add_objection_ids=tuple(d.get("add_objection_ids", ())),
-        remove_objection_ids=tuple(d.get("remove_objection_ids", ())),
+        add_objection_ids=_id_list(d.get("add_objection_ids")),
+        remove_objection_ids=_id_list(d.get("remove_objection_ids")),
     )

@@ -246,3 +246,27 @@ def test_default_selection_assembles_and_validates():
 
     ctx, _ = assemble(DEFAULT_SELECTION)
     validate(ctx)
+
+
+def test_assemble_rejects_path_traversal_ids():
+    # An id from untrusted room metadata must not escape the data dir.
+    import pytest
+
+    bad = Selection(
+        persona_id="../scorecards/closing_v1",
+        scenario_id="april-alvarado",
+        call_type="closing",
+        difficulty="medium",
+        scorecard="closing_v1",
+    )
+    with pytest.raises(assembler.AssembleError):
+        assembler.assemble(bad)
+
+
+def test_selection_from_metadata_ignores_non_list_objection_ids():
+    from context.selection import DEFAULT_SELECTION, selection_from_metadata
+
+    # A bare string must not be tuple()'d into per-character ids.
+    md = '{"persona_id":"april-alvarado","add_objection_ids":"authority"}'
+    sel = selection_from_metadata(md, fallback=DEFAULT_SELECTION)
+    assert sel.add_objection_ids == ()
