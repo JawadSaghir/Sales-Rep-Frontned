@@ -57,5 +57,7 @@ def render_evaluator(context: m.Context) -> str:
     sc = context.evaluation_config
     lines = [f"Scorecard: {sc.name}", "Score the rep on these weighted criteria:"]
     for crit in sc.criteria:
-        lines.append(f"- {crit.get('key')} (weight {crit.get('weight')}, scale {crit.get('scale')})")
+        lines.append(
+            f"- {crit.get('key')} (weight {crit.get('weight')}, scale {crit.get('scale')})"
+        )
     return "\n".join(lines)

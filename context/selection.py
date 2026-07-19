@@ -17,6 +17,7 @@ def _id_list(value: object) -> tuple[str, ...]:
         return tuple(str(x) for x in value)
     return ()
 
+
 DEFAULT_SELECTION = Selection(
     persona_id="april-alvarado",
     scenario_id="april-alvarado",
