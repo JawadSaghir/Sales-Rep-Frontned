@@ -121,3 +121,38 @@ def test_assemble_session_override_objections():
     ctx, _ = assembler.assemble(sel)
     assert "authority" in ctx.objection_pack.card_ids
     assert "finances" not in ctx.objection_pack.card_ids
+
+
+def _ctx():
+    return assembler.assemble(Selection(persona_id="april-alvarado",
+        scenario_id="april-alvarado", call_type="closing", difficulty="hard",
+        scorecard="closing_v1"))[0]
+
+
+def test_validate_accepts_real_context():
+    from context import validator
+    validator.validate(_ctx())  # must not raise
+
+
+def test_validate_rejects_empty_objection_pack():
+    import dataclasses
+
+    import pytest
+
+    from context import validator
+    from context.models import ObjectionPack
+    ctx = dataclasses.replace(_ctx(), objection_pack=ObjectionPack(cards=()))
+    with pytest.raises(validator.ValidationError):
+        validator.validate(ctx)
+
+
+def test_validate_rejects_missing_persona_name():
+    import dataclasses
+
+    import pytest
+
+    from context import validator
+    ctx = _ctx()
+    bad = dataclasses.replace(ctx, persona=dataclasses.replace(ctx.persona, name=""))
+    with pytest.raises(validator.ValidationError):
+        validator.validate(bad)
