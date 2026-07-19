@@ -103,4 +103,4 @@ def load_call_type(path) -> m.CallType:
 def load_scorecard(path) -> m.ScorecardConfig:
     d = _read(path)
     return m.ScorecardConfig(meta=load_meta(d), name=str(_req(d, "name", path)),
-                             criteria=tuple(d.get("criteria", ())))
+                             criteria=tuple(_req(d, "criteria", path)))

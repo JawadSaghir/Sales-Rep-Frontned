@@ -66,3 +66,11 @@ def test_loader_rejects_missing_required_field(tmp_path):
     p.write_text("id: x\nlevel: hard\n", encoding="utf-8")  # missing 'framing'
     with pytest.raises(loaders.LoaderError):
         loaders.load_difficulty(p)
+
+
+def test_load_scorecard_requires_criteria(tmp_path):
+    import pytest
+    p = tmp_path / "sc.yaml"
+    p.write_text("id: sc\nname: closing_v1\n", encoding="utf-8")  # no criteria
+    with pytest.raises(loaders.LoaderError):
+        loaders.load_scorecard(p)
