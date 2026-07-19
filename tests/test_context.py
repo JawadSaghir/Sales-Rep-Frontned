@@ -1,7 +1,8 @@
 from dataclasses import FrozenInstanceError
 
-from context import CONTEXT_DATA, loaders
+from context import CONTEXT_DATA, assembler, loaders
 from context import models as m
+from context.models import Selection
 
 
 def test_models_construct_and_are_frozen():
@@ -93,3 +94,30 @@ def test_real_content_loads():
     loaders.load_scorecard(d / "scorecards" / "closing_v1.yaml")
     sc = loaders.load_scenario(d / "scenarios" / "april-alvarado.yaml")
     assert sc.default_objection_ids  # scenario names its default objections
+
+
+def test_merge_objection_ids_hybrid():
+    out = assembler.merge_objection_ids(("authority", "pricing"), ("security",), ("pricing",))
+    assert out == ("authority", "security")  # add appended, remove dropped, order kept, deduped
+
+
+def test_assemble_real_selection_builds_context_and_manifest():
+    sel = Selection(persona_id="april-alvarado", scenario_id="april-alvarado",
+                    call_type="closing", difficulty="hard", scorecard="closing_v1")
+    ctx, manifest = assembler.assemble(sel)
+    assert ctx.persona.name == "April Alvarado"
+    assert ctx.company.name == "April's Beauty Bar"        # loaded via persona.company_id
+    assert ctx.difficulty.level == "hard"
+    assert ctx.objection_pack.card_ids[:1] == ("trust",)    # scenario default, first = primary
+    assert ctx.knowledge.items == () and ctx.state is None and ctx.memory is None
+    assert "objection_pack" in manifest.included_layers
+    assert {"knowledge", "state", "memory"} <= set(manifest.omitted_layers)
+
+
+def test_assemble_session_override_objections():
+    sel = Selection(persona_id="april-alvarado", scenario_id="april-alvarado",
+                    call_type="closing", difficulty="medium", scorecard="closing_v1",
+                    add_objection_ids=("authority",), remove_objection_ids=("finances",))
+    ctx, _ = assembler.assemble(sel)
+    assert "authority" in ctx.objection_pack.card_ids
+    assert "finances" not in ctx.objection_pack.card_ids
