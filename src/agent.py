@@ -1,17 +1,18 @@
 import asyncio
+import contextlib
 import json
 import logging
 import os
 import re
+import sys
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
 from livekit import rtc
 from livekit.agents import (
     Agent,
-    AgentConfigUpdate,
     AgentServer,
     AgentSession,
     ChatContext,
@@ -29,9 +30,15 @@ from mem0 import AsyncMemoryClient
 
 from coaching import CoachAgent
 from identity import resolve_rep_id
-from personas import build_briefing, build_prospect_prompt
+from memory_export import fetch_all, write_export
 from retrieval import SeedRetriever
 from scoring import format_practice_transcript
+
+# Force UTF-8 on stdout/stderr so logging persona memories (curly quotes,
+# non-breaking hyphens, etc.) doesn't crash Windows' default cp1252 handler.
+for _stream in (sys.stdout, sys.stderr):
+    with contextlib.suppress(AttributeError, ValueError):
+        _stream.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
 
 logger = logging.getLogger("agent")
 
@@ -87,6 +94,35 @@ def format_transcript(chat_ctx: ChatContext) -> str:
         if text:
             lines.append(f"{speaker}: {text}")
     return "\n".join(lines)
+
+
+def format_memory_messages(
+    chat_ctx: ChatContext, memory_str: str
+) -> list[dict[str, str]]:
+    """Render the spoken user/assistant turns as Mem0 message dicts.
+
+    Selects `message` items positively rather than skipping known non-message
+    kinds: a ChatContext also holds function calls, their outputs, and config
+    updates, none of which carry a `.content` attribute. Anything the persona's
+    tools add later is therefore ignored instead of crashing shutdown.
+
+    The memory blob injected at session start is dropped so recalled memories
+    are not written straight back as new ones.
+    """
+    messages = []
+    for item in chat_ctx.items:
+        if getattr(item, "type", None) != "message" or item.role not in (
+            "user",
+            "assistant",
+        ):
+            continue
+        text = (item.text_content or "").strip()
+        if not text:
+            continue
+        if memory_str and memory_str in text:
+            continue
+        messages.append({"role": item.role, "content": text})
+    return messages
 
 
 def write_transcript(
@@ -250,6 +286,36 @@ async def init_memory() -> AsyncMemoryClient | None:
         return None
 
 
+# Local, human-readable mirror of everything stored in Mem0 cloud.
+MEMORY_DIR = Path(__file__).resolve().parent.parent / "memory"
+
+
+async def refresh_local_snapshot() -> None:
+    """Mirror all Mem0 memories into the local ``memory/`` folder (best-effort).
+
+    Called after a call ends, so blocking network work is acceptable — we push
+    it to a thread and never let a failure escape. Keeping this a fresh sync
+    ``MemoryClient`` keeps it decoupled from the call's async client.
+    """
+
+    def _dump() -> int:
+        from mem0 import MemoryClient
+
+        client = MemoryClient()
+        snapshot = write_export(
+            MEMORY_DIR,
+            fetch_all(client),
+            generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        )
+        return snapshot["total_memories"]
+
+    try:
+        total = await asyncio.to_thread(_dump)
+        logging.info("Refreshed local memory snapshot (%s memories).", total)
+    except Exception:
+        logging.warning("Failed to refresh local memory snapshot.", exc_info=True)
+
+
 def prewarm(proc: JobProcess):
     # Load the voice-activity-detection model once per worker process so each
     # call starts fast instead of loading it on every connection.
@@ -311,23 +377,7 @@ async def my_agent(ctx: JobContext):
 
         logging.info("Shutting down, saving chat context to memory...")
 
-        messages_formatted = []
-        logging.info(f"Chat context messages: {chat_ctx.items}")
-
-        for item in chat_ctx.items:
-            if isinstance(item, AgentConfigUpdate):
-                continue
-            content_str = (
-                "".join(item.content)
-                if isinstance(item.content, list)
-                else str(item.content)
-            )
-            if memory_str and memory_str in content_str:
-                continue
-            if item.role in ["user", "assistant"]:
-                messages_formatted.append(
-                    {"role": item.role, "content": content_str.strip()}
-                )
+        messages_formatted = format_memory_messages(chat_ctx, memory_str)
 
         logging.info(f"Formatted messages to add to memory: {messages_formatted}")
         try:
@@ -335,6 +385,9 @@ async def my_agent(ctx: JobContext):
             logging.info("Chat context saved to memory.")
         except Exception:
             logging.warning("Failed to save chat context to Mem0", exc_info=True)
+
+        # Refresh the local memory/ mirror so it reflects this session.
+        await refresh_local_snapshot()
 
     ctx.log_context_fields = {"room": ctx.room.name}
 
@@ -355,6 +408,9 @@ async def my_agent(ctx: JobContext):
         # Change `voice` to any Cartesia voice id to change how the agent sounds.
         # See https://docs.livekit.io/agents/models/tts/
         tts=cartesia.TTS(model="sonic-3", voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc"),
+        # tts = openai.TTS(
+        # model="kokoro",
+        # voice="af_bella"),
         vad=ctx.proc.userdata["vad"],
         # Turn detection + endpointing + interruption (SDK 1.5+ unified config).
         # See https://docs.livekit.io/agents/build/turns
@@ -385,8 +441,20 @@ async def my_agent(ctx: JobContext):
     mem0 = await init_memory()
 
     # --- Training assets: prospect card, rubric, retriever, scorer, coach ---
-    character = os.environ.get("PROSPECT_CHARACTER", "burned_before_skeptic")
-    character_prompt = build_prospect_prompt(character)
+    # `context` is a repo-root package; make it importable when this file is
+    # run directly (`uv run src/agent.py dev` puts only src/ on sys.path).
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from context.assembler import assemble
+    from context.renderer import render_buyer
+    from context.selection import DEFAULT_SELECTION, selection_from_metadata
+    from context.validator import validate
+
+    selection = selection_from_metadata(ctx.room.metadata, fallback=DEFAULT_SELECTION)
+    _bot_context, _manifest = assemble(selection)
+    validate(_bot_context)
+    character = selection.persona_id
+    character_prompt = render_buyer(_bot_context)
+    logging.info("context manifest: %s", _manifest)
     rubric = RUBRIC_PATH.read_text(encoding="utf-8")
     retriever = SeedRetriever(SEED_OBJECTION_EXAMPLES_PATH)
     complete = make_openrouter_complete("anthropic/claude-3-haiku")
@@ -441,7 +509,10 @@ async def my_agent(ctx: JobContext):
     # Take the initiative: brief the rep out-of-character on who they're about to
     # call (persona, backstory, character, and objections to expect). Then the
     # ProspectAgent takes over in character and waits for the rep to lead.
-    await session.say(build_briefing(character))
+    await session.say(
+        _bot_context.persona.briefing_summary
+        or "Whenever you're ready, go ahead and start your call."
+    )
 
     await ctx.connect()
     ctx.add_shutdown_callback(
