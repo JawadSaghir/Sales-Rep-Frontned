@@ -43,6 +43,20 @@ _ROWS = [
 ]
 
 
+def test_load_rows_filters_and_missing_file(tmp_path):
+    import csv as _c
+    p = tmp_path / "reps.csv"
+    with open(p, "w", encoding="utf-8", newline="") as f:
+        w = _c.DictWriter(f, fieldnames=["rep_name", "no_show", "total_score"])
+        w.writeheader()
+        w.writerow({"rep_name": "Adam Pellegrino", "no_show": "no", "total_score": "70"})
+        w.writerow({"rep_name": "Ghost Rep", "no_show": "yes", "total_score": "10"})   # no-show → skipped
+        w.writerow({"rep_name": "", "no_show": "no", "total_score": "5"})               # empty name → skipped
+    rows = rep_store.load_rows(p)
+    assert [r["rep_name"] for r in rows] == ["Adam Pellegrino"]
+    assert rep_store.load_rows(tmp_path / "does-not-exist.csv") == []
+
+
 def test_rep_summaries_group_and_normalize():
     s = {r["slug"]: r for r in rep_store.rep_summaries(_ROWS)}
     adam = s["adam-pellegrino"]

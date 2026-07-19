@@ -66,13 +66,14 @@ def rep_summaries(rows: list[dict]) -> list[dict]:
         scores = [safe_float(r.get("total_score")) for r in rs]
         scores = [s for s in scores if s is not None]
         bands = [b for b in (normalize_grade(r.get("grade", "")) for r in rs) if b]
+        counts = Counter(bands)
         out.append({
             "slug": slug,
             "name": rs[0].get("rep_name", "").strip(),
             "calls": len(rs),
             "avg_total_score": round(mean(scores), 1) if scores else None,
             "grade_normalized": (
-                max(Counter(bands), key=lambda b: (Counter(bands)[b], GRADE_BANDS.index(b)))
+                max(counts, key=lambda b: (counts[b], GRADE_BANDS.index(b)))
                 if bands else None
             ),
         })
