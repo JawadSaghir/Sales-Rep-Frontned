@@ -51,3 +51,11 @@ def test_excludes_failed_and_unknown_types(tmp_path: Path):
     # authority example exists but rep_response_worked == "no"
     assert r.winning_lines("authority") == []
     assert r.winning_lines("teleportation") == []
+
+
+def test_tolerates_missing_file(tmp_path: Path):
+    # The seed file is an optional training asset. If it's absent (e.g. removed
+    # in a refactor), the retriever must degrade to no examples rather than
+    # crash the call at startup.
+    r = SeedRetriever(tmp_path / "does_not_exist.json")
+    assert r.winning_lines("price") == []

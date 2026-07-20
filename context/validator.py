@@ -12,8 +12,6 @@ class ValidationError(ValueError):
 def validate(context: m.Context) -> None:
     if not context.persona.name:
         raise ValidationError("persona has no name")
-    if not context.company.name:
-        raise ValidationError("company has no name")
     if not context.scenario.buyer_goal:
         raise ValidationError("scenario has no buyer_goal")
     if not context.difficulty.framing:

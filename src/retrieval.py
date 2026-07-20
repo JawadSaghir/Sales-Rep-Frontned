@@ -10,9 +10,12 @@ The Coach depends only on the Retriever protocol, so the backend is swappable.
 """
 
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+
+logger = logging.getLogger("agent.retrieval")
 
 WORKED_VALUES = {"yes", "partially"}
 
@@ -36,7 +39,16 @@ class SeedRetriever:
     """Retriever backed by a local JSON list of objection records."""
 
     def __init__(self, path: Path) -> None:
-        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+        p = Path(path)
+        if not p.is_file():
+            # The seed file is an optional training asset. If it's absent (e.g.
+            # removed in a refactor), degrade to no examples rather than crash
+            # the call at startup — the coach still runs, just without model
+            # answers drawn from winning examples.
+            logger.warning("Seed file not found at %s; no winning examples loaded.", p)
+            self._examples = []
+            return
+        raw = json.loads(p.read_text(encoding="utf-8"))
         self._examples = [
             WinningExample(
                 objection_type=item["type"],

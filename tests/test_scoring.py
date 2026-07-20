@@ -1,7 +1,7 @@
 import json
 
 from retrieval import WinningExample
-from scoring import score_session
+from scoring import DEFAULT_RUBRIC, RUBRIC_STEPS, score_session
 
 
 class _FakeRetriever:
@@ -55,6 +55,29 @@ def test_scores_and_attaches_model_answers():
     assert authority.handled is False
     assert authority.missed == ["reframe", "re_ask"]
     assert authority.model_answer == "what a top rep did for authority"
+
+
+def test_default_rubric_is_self_contained():
+    # The rubric lives in code, not a file: the agent must not depend on a
+    # prompts/rubric.md asset that a refactor could remove.
+    assert isinstance(DEFAULT_RUBRIC, str)
+    assert DEFAULT_RUBRIC.strip()
+    for step in RUBRIC_STEPS:
+        assert step in DEFAULT_RUBRIC
+
+
+def test_score_session_works_with_default_rubric():
+    card = score_session(
+        transcript="Rep: ...\nProspect: too expensive",
+        rubric=DEFAULT_RUBRIC,
+        retriever=_FakeRetriever(),
+        complete=lambda prompt: _LLM_JSON,
+        rep_id="jenn",
+        session_id="s1",
+        character="c",
+    )
+    assert card.overall_grade == "B-"
+    assert [o.type for o in card.per_objection] == ["price", "authority"]
 
 
 def test_fail_open_on_bad_llm_output():

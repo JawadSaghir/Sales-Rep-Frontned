@@ -18,9 +18,12 @@ def _id_list(value: object) -> tuple[str, ...]:
     return ()
 
 
+# charlie-ritenour is the only persona with a matching scenario present in
+# context/data; the former april-alvarado persona file was removed during the
+# persona-gen refactor, leaving this default pointing at a missing layer.
 DEFAULT_SELECTION = Selection(
-    persona_id="april-alvarado",
-    scenario_id="april-alvarado",
+    persona_id="charlie-ritenour",
+    scenario_id="charlie-ritenour",
     call_type="closing",
     difficulty="medium",
     scorecard="closing_v1",

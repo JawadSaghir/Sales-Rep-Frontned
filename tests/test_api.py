@@ -28,9 +28,20 @@ def test_call_types_lists_real_yaml():
 
 def test_personas_and_difficulties():
     personas = client.get("/api/personas").json()["data"]
-    assert any(p["slug"] == "april-alvarado-closing" for p in personas)
+    assert any(p["slug"] == "charlie-ritenour-closing" for p in personas)
     diffs = {d["level"] for d in client.get("/api/difficulties").json()["data"]}
     assert {"easy", "medium", "hard"} <= diffs
+
+
+def test_persona_payload_is_human_readable():
+    personas = client.get("/api/personas").json()["data"]
+    charlie = next(p for p in personas if p["slug"] == "charlie-ritenour-closing")
+    assert charlie["character_name"] == "Charlie Ritenour"
+    # primary_objection must be the objection's human text, not the bare id "price"
+    assert charlie["primary_objection"] not in ("", "price")
+    assert " " in charlie["primary_objection"]
+    # business_name should be populated so the UI subtitle isn't a stray " · "
+    assert charlie["business_name"].strip()
 
 
 _ROWS = [
@@ -127,16 +138,73 @@ def test_build_room_metadata_is_json():
     import json
 
     from api import livekit_session
+    from context.models import Selection
 
+    sel = Selection(
+        persona_id="charlie-ritenour",
+        scenario_id="charlie-ritenour",
+        call_type="closing",
+        difficulty="medium",
+        scorecard="closing_v1",
+    )
     md = livekit_session.build_room_metadata(
-        "s1", "adam-pellegrino", "april-alvarado-closing", "medium"
+        "s1", "adam-pellegrino", "charlie-ritenour-closing", sel
     )
     assert json.loads(md) == {
         "session_id": "s1",
         "rep_slug": "adam-pellegrino",
-        "bot_slug": "april-alvarado-closing",
+        "bot_slug": "charlie-ritenour-closing",
+        "persona_id": "charlie-ritenour",
+        "scenario_id": "charlie-ritenour",
+        "call_type": "closing",
         "difficulty": "medium",
+        "scorecard": "closing_v1",
     }
+
+
+def test_session_metadata_drives_agent_selection(tmp_path, monkeypatch):
+    """The bot the user picked must reach the agent via room metadata.
+
+    Without persona_id in the metadata the agent silently falls back to
+    DEFAULT_SELECTION, so every call would role-play the default persona.
+    """
+    monkeypatch.setenv("SESSIONS_DB", str(tmp_path / "s2.db"))
+    from importlib import reload
+
+    from api import livekit_session
+    from api import main as m
+    from api import settings as s
+
+    reload(s)
+    reload(m)
+    monkeypatch.setattr(livekit_session, "mint_token", lambda *a, **k: "tok")
+    captured = {}
+
+    async def _fake_create_room(*a, **k):
+        captured["metadata"] = a[1] if len(a) > 1 else k.get("metadata")
+
+    monkeypatch.setattr(livekit_session, "create_room", _fake_create_room)
+    c = TestClient(m.app)
+    r = c.post(
+        "/api/sessions",
+        json={
+            "rep_slug": "adam-pellegrino",
+            "call_type": "closing",
+            "persona_slug": "charlie-ritenour-closing",
+            "difficulty": "hard",
+        },
+    )
+    assert r.status_code == 200
+
+    from context.selection import DEFAULT_SELECTION, selection_from_metadata
+
+    sel = selection_from_metadata(captured["metadata"], fallback=DEFAULT_SELECTION)
+    assert sel.persona_id == "charlie-ritenour"
+    assert sel.scenario_id == "charlie-ritenour"
+    assert sel.call_type == "closing"
+    assert sel.scorecard == "closing_v1"
+    # session-chosen difficulty must win over the bot's own default ("medium")
+    assert sel.difficulty == "hard"
 
 
 def test_post_session_happy_and_validation(tmp_path, monkeypatch):
@@ -161,7 +229,7 @@ def test_post_session_happy_and_validation(tmp_path, monkeypatch):
         json={
             "rep_slug": "adam-pellegrino",
             "call_type": "closing",
-            "persona_slug": "april-alvarado-closing",
+            "persona_slug": "charlie-ritenour-closing",
             "difficulty": "medium",
         },
     )
@@ -174,7 +242,7 @@ def test_post_session_happy_and_validation(tmp_path, monkeypatch):
         json={
             "rep_slug": "x",
             "call_type": "nope",
-            "persona_slug": "april-alvarado-closing",
+            "persona_slug": "charlie-ritenour-closing",
             "difficulty": "medium",
         },
     )

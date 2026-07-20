@@ -5,6 +5,7 @@ PyAV is blocked; its pure debrief logic lives in debrief.py, which is tested
 directly.
 """
 
+import asyncio
 import logging
 from collections.abc import Callable
 from pathlib import Path
@@ -49,7 +50,13 @@ class CoachAgent(Agent):
         self._mem0 = mem0
 
     async def on_enter(self) -> None:
-        card = score_session(
+        # score_session() is synchronous and sends the whole transcript to
+        # OpenRouter, so calling it directly here froze the event loop for the
+        # full round trip — audio I/O, STT and turn detection all stalled and
+        # the agent went dead the moment the prospect handed off. Offload it,
+        # matching how agent.py handles its other blocking calls.
+        card = await asyncio.to_thread(
+            score_session,
             self._transcript,
             self._rubric,
             self._retriever,
@@ -60,7 +67,8 @@ class CoachAgent(Agent):
         )
         await self.session.generate_reply(instructions=build_debrief_instructions(card))
         try:
-            save_scorecard(card, self._scorecards_dir)
+            # Disk write — small, but it is still blocking I/O on the loop.
+            await asyncio.to_thread(save_scorecard, card, self._scorecards_dir)
         except Exception:
             logger.warning("Failed to persist scorecard.", exc_info=True)
         if self._mem0 is not None and card.per_objection:

@@ -33,7 +33,7 @@ def test_authored_call_types_and_difficulty_load():
     for lvl in ["easy", "medium", "hard"]:
         d = bot_config.load_layer("difficulty", lvl)
         assert d["level"] == lvl
-        assert isinstance(d["shutdown_threshold"], int)
+        assert d["framing"].strip()  # context-schema difficulty carries `framing`
 
 
 def test_behavior_template_has_new_placeholders():

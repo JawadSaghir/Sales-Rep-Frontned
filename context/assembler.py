@@ -44,10 +44,8 @@ def _path(data_dir: Path, kind: str, name: str) -> Path:
 def assemble(
     selection: m.Selection, data_dir: Path = CONTEXT_DATA
 ) -> tuple[m.Context, m.ContextManifest]:
-    system = loaders.load_system(_path(data_dir, "system", "system"))
     policy = loaders.load_policy(_path(data_dir, "policy", "conversation"))
     persona = loaders.load_persona(_path(data_dir, "personas", selection.persona_id))
-    company = loaders.load_company(_path(data_dir, "companies", persona.company_id))
     scenario = loaders.load_scenario(
         _path(data_dir, "scenarios", selection.scenario_id)
     )
@@ -71,10 +69,8 @@ def assemble(
     )
 
     ctx = m.Context(
-        system=system,
         conversation_policy=policy,
         persona=persona,
-        company=company,
         knowledge=m.KnowledgeBundle(items=()),
         scenario=scenario,
         objection_pack=m.ObjectionPack(cards=cards),
@@ -86,10 +82,8 @@ def assemble(
     )
 
     included = (
-        "system",
         "conversation_policy",
         "persona",
-        "company",
         "scenario",
         "objection_pack",
         "difficulty",

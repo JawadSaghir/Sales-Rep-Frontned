@@ -10,15 +10,24 @@ __pycache__
 .DS_Store
 .idea
 .vscode
-# Frontend
-frontend/node_modules
-frontend/.next
-frontend/.env*
+# Frontend — this repo publishes the backend only; the Next.js UI lives locally
+frontend/
 # Call transcripts (contain real conversation content / PII)
 transcripts/
+# Raw + cleaned call corpus. Never commit: real rep/client names, live Zoom
+# recording share links, and named employee performance grades. The runtime
+# reads context/data/ (authored YAML), not these, so the backend stays
+# reproducible without them. Regenerate locally from the Airtable exports.
+data/raw_data/
+data/cleaned_data/
+# Runtime SQLite (per-session state, keyed by rep)
+data/sessions.db
 # Persisted per-rep scorecards (training output, keyed by rep_id)
 data/scorecards/
 # Rep-trainer generated data / secrets (Task 14)
 cleaned_data/rep_trainer.db
 cleaned_data/rep_profiles/
 .env
+
+# Scratch artifacts derived from real calls (verbatim quotes, customer names)
+context/data/*.json

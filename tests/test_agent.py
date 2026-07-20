@@ -8,17 +8,26 @@ import pytest
 from livekit.agents import AgentSession, inference, llm
 
 from agent import ProspectAgent
-from personas import build_prospect_prompt
+from context.assembler import assemble
+from context.renderer import render_buyer
+from context.selection import DEFAULT_SELECTION
 
 
 def _llm() -> llm.LLM:
     return inference.LLM(model="openai/gpt-4.1-mini")
 
 
+def _prospect_prompt() -> str:
+    # The buyer prompt now comes from the context pipeline (render_buyer), the
+    # same path the runtime uses, instead of the retired legacy persona renderer.
+    context, _ = assemble(DEFAULT_SELECTION)
+    return render_buyer(context)
+
+
 @pytest.mark.asyncio
 async def test_prospect_stays_in_character_and_objects() -> None:
     """The prospect persona resists and raises an objection rather than selling."""
-    prompt = build_prospect_prompt("burned_before_skeptic")
+    prompt = _prospect_prompt()
     async with (
         _llm() as judge,
         AgentSession(llm=judge) as session,

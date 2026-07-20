@@ -40,30 +40,9 @@ def load_meta(data: dict) -> m.LayerMeta:
     )
 
 
-def load_system(path) -> m.SystemRules:
-    d = _read(path)
-    return m.SystemRules(
-        meta=load_meta(d),
-        role=str(_req(d, "role", path)),
-        rules=_tuple(_req(d, "rules", path)),
-    )
-
-
 def load_policy(path) -> m.ConversationPolicy:
     d = _read(path)
     return m.ConversationPolicy(meta=load_meta(d), rules=_tuple(_req(d, "rules", path)))
-
-
-def load_company(path) -> m.Company:
-    d = _read(path)
-    return m.Company(
-        meta=load_meta(d),
-        name=str(_req(d, "name", path)),
-        industry=str(_req(d, "industry", path)),
-        sub_industry=str(d.get("sub_industry", "")),
-        business_stage=str(d.get("business_stage", "")),
-        initiatives=_tuple(d.get("initiatives")),
-    )
 
 
 def load_persona(path) -> m.Persona:
@@ -78,8 +57,8 @@ def load_persona(path) -> m.Persona:
         decision_style=str(d.get("decision_style", "")),
         values=_tuple(d.get("values")),
         risk_tolerance=str(d.get("risk_tolerance", "")),
-        company_id=str(_req(d, "company_id", path)),
         briefing_summary=str(d.get("briefing_summary", "")),
+        opinions=str(d.get("opinions", "")),
     )
 
 

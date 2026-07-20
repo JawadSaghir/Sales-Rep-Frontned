@@ -83,12 +83,9 @@ def test_load_scorecard_requires_criteria(tmp_path):
 
 def test_real_content_loads():
     d = CONTEXT_DATA
-    sys_ = loaders.load_system(d / "system" / "system.yaml")
-    assert sys_.rules and "character" in " ".join(sys_.rules).lower()
     loaders.load_policy(d / "policy" / "conversation.yaml")
-    p = loaders.load_persona(d / "personas" / "april-alvarado.yaml")
-    assert p.name and p.company_id
-    loaders.load_company(d / "companies" / f"{p.company_id}.yaml")
+    p = loaders.load_persona(d / "personas" / "charlie-ritenour.yaml")
+    assert p.name
     for level in ["easy", "medium", "hard"]:
         assert loaders.load_difficulty(d / "difficulty" / f"{level}.yaml").framing
     for ct in ["closing", "discovery", "follow_up"]:
@@ -114,18 +111,17 @@ def test_merge_objection_ids_hybrid():
 
 def test_assemble_real_selection_builds_context_and_manifest():
     sel = Selection(
-        persona_id="april-alvarado",
-        scenario_id="april-alvarado",
+        persona_id="charlie-ritenour",
+        scenario_id="charlie-ritenour",
         call_type="closing",
         difficulty="hard",
         scorecard="closing_v1",
     )
     ctx, manifest = assembler.assemble(sel)
-    assert ctx.persona.name == "April Alvarado"
-    assert ctx.company.name == "April's Beauty Bar"  # loaded via persona.company_id
+    assert ctx.persona.name == "Charlie Ritenour"
     assert ctx.difficulty.level == "hard"
     assert ctx.objection_pack.card_ids[:1] == (
-        "trust",
+        "price",
     )  # scenario default, first = primary
     assert ctx.knowledge.items == () and ctx.state is None and ctx.memory is None
     assert "objection_pack" in manifest.included_layers
@@ -134,24 +130,24 @@ def test_assemble_real_selection_builds_context_and_manifest():
 
 def test_assemble_session_override_objections():
     sel = Selection(
-        persona_id="april-alvarado",
-        scenario_id="april-alvarado",
+        persona_id="charlie-ritenour",
+        scenario_id="charlie-ritenour",
         call_type="closing",
         difficulty="medium",
         scorecard="closing_v1",
-        add_objection_ids=("authority",),
+        add_objection_ids=("trust",),
         remove_objection_ids=("finances",),
     )
     ctx, _ = assembler.assemble(sel)
-    assert "authority" in ctx.objection_pack.card_ids
-    assert "finances" not in ctx.objection_pack.card_ids
+    assert "trust" in ctx.objection_pack.card_ids  # added on top of scenario defaults
+    assert "finances" not in ctx.objection_pack.card_ids  # removed from defaults
 
 
 def _ctx():
     return assembler.assemble(
         Selection(
-            persona_id="april-alvarado",
-            scenario_id="april-alvarado",
+            persona_id="charlie-ritenour",
+            scenario_id="charlie-ritenour",
             call_type="closing",
             difficulty="hard",
             scorecard="closing_v1",
@@ -195,16 +191,16 @@ def test_render_buyer_canonical_order_and_content():
     from context import renderer
 
     out = renderer.render_buyer(_ctx())
-    # canonical order: SYSTEM before POLICY before DIFFICULTY before PERSONA
+    # canonical order: identity/persona first, then rules, policy, and the call
     assert (
-        out.index("# SYSTEM")
+        out.index("# WHO YOU ARE")
+        < out.index("# CORE RULES")
         < out.index("# CONVERSATION POLICY")
-        < out.index("# DIFFICULTY")
-        < out.index("# WHO YOU ARE")
+        < out.index("# THIS CALL")
     )
-    assert "April Alvarado" in out  # persona
+    assert "Charlie Ritenour" in out  # persona
     assert "skeptical" in out  # difficulty framing
-    assert "mixed reviews" in out.lower()  # objection buyer_language
+    assert "clear roi" in out.lower()  # objection buyer_language
     assert "{{" not in out  # no unfilled placeholders
     # evaluation / state / memory never leak into the buyer prompt
     assert "scorecard" not in out.lower() and "criteria" not in out.lower()

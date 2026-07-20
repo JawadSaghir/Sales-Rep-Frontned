@@ -21,18 +21,18 @@ from livekit.agents import (
     RunContext,
     cli,
     function_tool,
+    inference,
     room_io,
 )
 from livekit.agents.utils.audio import AudioByteStream
 from livekit.plugins import cartesia, deepgram, openai, silero
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from mem0 import AsyncMemoryClient
 
 from coaching import CoachAgent
 from identity import resolve_rep_id
 from memory_export import fetch_all, write_export
 from retrieval import SeedRetriever
-from scoring import format_practice_transcript
+from scoring import DEFAULT_RUBRIC, format_practice_transcript
 
 # Force UTF-8 on stdout/stderr so logging persona memories (curly quotes,
 # non-breaking hyphens, etc.) doesn't crash Windows' default cp1252 handler.
@@ -74,7 +74,6 @@ TRANSCRIPTS_DIR = Path(__file__).parent.parent / "transcripts"
 
 # Rep-trainer assets and outputs.
 SCORECARDS_DIR = Path(__file__).parent.parent / "data" / "scorecards"
-RUBRIC_PATH = Path(__file__).parent.parent / "prompts" / "rubric.md"
 SEED_OBJECTION_EXAMPLES_PATH = (
     Path(__file__).parent.parent / "data" / "seed" / "objection_examples.json"
 )
@@ -202,8 +201,8 @@ class APMNoiseSuppression(rtc.FrameProcessor[rtc.AudioFrame]):
 class ProspectAgent(Agent):
     """The AI role-plays a prospect the rep practices against.
 
-    Persona comes from prompts/personas/<stem>.yaml rendered into
-    prompts/prospect_template.md (see personas.build_prospect_prompt).
+    The character prompt is assembled from context/data/ layers and rendered by
+    context.renderer.render_buyer (see my_agent below).
     """
 
     def __init__(
@@ -259,7 +258,12 @@ class ProspectAgent(Agent):
         """
         self.signals.append({"signal_type": signal_type, "quote": quote})
         logger.info("Prospect signal [%s]: %s", signal_type, quote)
-        return None
+        # Must return output, not None. livekit-agents sets
+        # `reply_required = fnc_out is not None` (voice/generation.py), and skips
+        # speech generation entirely when it's False — so returning None made the
+        # prospect go mute for the whole turn every time it logged a signal.
+        # The rep never hears this string; it only keeps the turn alive.
+        return "Signal recorded. Continue the conversation in character."
 
 
 server = AgentServer()
@@ -277,11 +281,16 @@ async def init_memory() -> AsyncMemoryClient | None:
     """
     try:
         return await asyncio.to_thread(AsyncMemoryClient)
-    except Exception:
+    except Exception as exc:
+        # Expected, handled degradation (DNS/connectivity down or a bad key).
+        # Log the exception type only, not a full traceback — this path is not a
+        # crash, and a 40-line stack here reads like one (see the getaddrinfo
+        # cascade during a transient DNS outage). The call proceeds without
+        # long-term memory.
         logging.warning(
-            "Mem0 unavailable (network/API-key issue) — continuing without "
-            "long-term memory for this call.",
-            exc_info=True,
+            "Mem0 unavailable (%s) — continuing without long-term memory "
+            "for this call.",
+            exc.__class__.__name__,
         )
         return None
 
@@ -403,22 +412,40 @@ async def my_agent(ctx: JobContext):
         llm=openai.LLM.with_openrouter(
             model="anthropic/claude-3-haiku",
             provider={"sort": "latency"},
+            temperature=0.6,
         ),
-        # Text-to-speech: Cartesia (sonic-3). Reads CARTESIA_API_KEY from .env.local.
-        # Change `voice` to any Cartesia voice id to change how the agent sounds.
+        # Text-to-speech: Cartesia Sonic-3. Reads CARTESIA_API_KEY from .env.local.
+        # `voice` is a Cartesia voice *id* (UUID), not a display name — copy one from
+        # https://play.cartesia.ai (Voices > ... > Copy ID).
+        # NOTE: this account previously hit `quota_exceeded` ("Model credits limit
+        # reached") and 402'd every TTS request, which made the agent join calls but
+        # never speak. If it goes silent again, check Cartesia credits first.
         # See https://docs.livekit.io/agents/models/tts/
-        tts=cartesia.TTS(model="sonic-3", voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc"),
-        # tts = openai.TTS(
-        # model="kokoro",
-        # voice="af_bella"),
+        tts=cartesia.TTS(
+            model="sonic-3",
+            voice="5ee9feff-1265-424a-9d7f-8e4d431a12c7",
+        ),
         vad=ctx.proc.userdata["vad"],
         # Turn detection + endpointing + interruption (SDK 1.5+ unified config).
         # See https://docs.livekit.io/agents/build/turns
         turn_handling={
             # Semantic model that decides when the caller has finished a sentence.
-            "turn_detection": MultilingualModel(),
-            # Reply sooner after the caller stops (default min_delay is 0.5s).
-            "endpointing": {"min_delay": 0.3, "max_delay": 3.0},
+            # Pinned to v1-mini, which transports/eot runs in-process (ctypes).
+            # The default would be v1: detector.py picks it whenever
+            # `is_hosted() or is_dev_mode()`, so `agent.py dev` silently routed
+            # every turn to LiveKit Cloud and logged "turn detection transport
+            # latency is too high: 777ms". v1 is more accurate but only free for
+            # agents deployed on LiveKit Cloud; locally it just costs a round trip.
+            "turn_detection": inference.TurnDetector(version="v1-mini"),
+            # Fixed, not dynamic. audio_recognition.py sets
+            # `endpointing_delay = max_delay` outright whenever the detector's
+            # confidence lands under unlikely_threshold, so max_delay is the
+            # common path for short replies — 2.0s instead of the old 3.0s.
+            # "dynamic" was tried and reverted: it adapts min_delay from observed
+            # pauses, and one 26s idle gap pushed min_delay 0.3 -> 2.0 for the
+            # rest of the session ("min endpointing delay updated ... pause: 26.5").
+            # It learns from silence, which a practice call has plenty of.
+            "endpointing": {"mode": "fixed", "min_delay": 0.3, "max_delay": 2.0},
             # Barge-in: "vad" stops the agent the instant the caller speaks over it.
             # (The default "adaptive" mode waits to confirm turn-taking and can ignore
             # short interruptions.) resume_false_interruption=False keeps it stopped
@@ -428,11 +455,12 @@ async def my_agent(ctx: JobContext):
                 "min_duration": 0.3,
                 "resume_false_interruption": False,
             },
+            # Start generating the reply before end-of-turn is fully confirmed — a
+            # big perceived-latency win. (Was the top-level `preemptive_generation=True`
+            # kwarg, deprecated in favour of this nested form; removed in v2.0.) See
+            # https://docs.livekit.io/agents/build/audio/#preemptive-generation
+            "preemptive_generation": {"enabled": True},
         },
-        # Start generating the reply before end-of-turn is fully confirmed — a big
-        # perceived-latency win. See
-        # https://docs.livekit.io/agents/build/audio/#preemptive-generation
-        preemptive_generation=True,
     )
 
     # --- Long-term memory (Mem0): recall what this caller told us before ---
@@ -458,7 +486,9 @@ async def my_agent(ctx: JobContext):
     character = selection.persona_id
     character_prompt = render_buyer(_bot_context)
     logging.info("context manifest: %s", _manifest)
-    rubric = RUBRIC_PATH.read_text(encoding="utf-8")
+    # Rubric is inlined (see scoring.DEFAULT_RUBRIC) rather than loaded from a
+    # file, so there is no asset to go missing and crash the call at startup.
+    rubric = DEFAULT_RUBRIC
     retriever = SeedRetriever(SEED_OBJECTION_EXAMPLES_PATH)
     complete = make_openrouter_complete("anthropic/claude-3-haiku")
     safe_room = re.sub(r"[^A-Za-z0-9_-]+", "_", ctx.room.name or "call")

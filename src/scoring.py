@@ -15,6 +15,17 @@ logger = logging.getLogger("agent.scoring")
 
 RUBRIC_STEPS = ["acknowledge", "reframe", "evidence", "re_ask"]
 
+#: Inline rubric used to grade objection handling. Kept in code (not a file) so
+#: the agent has no external asset to load at call-start — a missing
+#: prompts/rubric.md previously crashed the whole call.
+DEFAULT_RUBRIC = (
+    "Grade how well the rep worked through each objection using these four steps:\n"
+    "1. acknowledge - recognize the prospect's concern without dismissing it\n"
+    "2. reframe - reposition the concern around value or a different angle\n"
+    "3. evidence - back the reframe with a concrete proof point or example\n"
+    "4. re_ask - return to the close or next step after handling the concern"
+)
+
 
 def format_practice_transcript(chat_ctx: "ChatContext") -> str:
     """Render turns for scoring. In training the AI is the Prospect (assistant

@@ -13,26 +13,9 @@ class LayerMeta:
 
 
 @dataclass(frozen=True)
-class SystemRules:
-    meta: LayerMeta
-    role: str
-    rules: tuple[str, ...]
-
-
-@dataclass(frozen=True)
 class ConversationPolicy:
     meta: LayerMeta
     rules: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class Company:
-    meta: LayerMeta
-    name: str
-    industry: str
-    sub_industry: str = ""
-    business_stage: str = ""
-    initiatives: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -46,8 +29,8 @@ class Persona:
     decision_style: str
     values: tuple[str, ...]
     risk_tolerance: str
-    company_id: str
     briefing_summary: str = ""
+    opinions: str = ""
 
 
 @dataclass(frozen=True)
@@ -131,10 +114,8 @@ class ContextManifest:
 
 @dataclass(frozen=True)
 class Context:
-    system: SystemRules
     conversation_policy: ConversationPolicy
     persona: Persona
-    company: Company
     knowledge: KnowledgeBundle
     scenario: Scenario
     objection_pack: ObjectionPack
