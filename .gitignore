@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Env - NEXT_PUBLIC_API_BASE is set in the Vercel dashboard, not committed
+.env*
+!.env.example
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Editor / OS
+.DS_Store
+.idea
+.vscode
+
+# Vercel CLI link data
+.vercel
