@@ -390,9 +390,11 @@ function HomeInner() {
 
               <div className="card" style={{ width: '100%', maxWidth: 420, padding: 16 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)', marginBottom: 8 }}>
-                  {firstName}&apos;s main objection
+                  Your scenario
                 </div>
-                <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', lineHeight: 1.6 }}>{selPersona.primary_objection}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
+                  {selPersona.scenario || selPersona.primary_objection}
+                </div>
               </div>
             </div>
 

@@ -28,6 +28,7 @@ export interface Persona {
   business_name: string;
   industry: string;
   primary_objection: string;
+  scenario: string;
 }
 
 export interface Difficulty {
