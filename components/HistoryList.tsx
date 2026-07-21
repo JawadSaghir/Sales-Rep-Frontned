@@ -41,6 +41,7 @@ function StatCard({ label, value, sub, delta, deltaColor }: { label: string; val
 export function HistoryList({ onOpen, onStart }: { onOpen: (id: string) => void; onStart: () => void }) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
@@ -48,20 +49,29 @@ export function HistoryList({ onOpen, onStart }: { onOpen: (id: string) => void;
     let timer: ReturnType<typeof setInterval> | undefined;
 
     const refresh = async () => {
-      const data = await getSessions();
-      if (!alive) return;
-      setSessions(data);
-      setLoading(false);
-      const anyPending = data.some(s => s.status === 'evaluating');
-      if (anyPending && !timer) {
-        timer = setInterval(refresh, 4000);
-      } else if (!anyPending && timer) {
-        clearInterval(timer);
-        timer = undefined;
+      try {
+        const data = await getSessions();
+        if (!alive) return;
+        setSessions(data);
+        setError(null);
+        const anyPending = data.some(s => s.status === 'evaluating');
+        if (anyPending && !timer) {
+          timer = setInterval(refresh, 4000);
+        } else if (!anyPending && timer) {
+          clearInterval(timer);
+          timer = undefined;
+        }
+      } catch (e: unknown) {
+        // Don't let an outage look like an empty history. The interval (if any)
+        // keeps ticking and recovers on the next successful poll.
+        if (!alive) return;
+        setError(e instanceof Error ? e.message : 'Could not load sessions.');
+      } finally {
+        if (alive) setLoading(false);
       }
     };
 
-    refresh().catch(() => { if (alive) setLoading(false); });
+    refresh();
     return () => { alive = false; if (timer) clearInterval(timer); };
   }, []);
 
@@ -121,7 +131,16 @@ export function HistoryList({ onOpen, onStart }: { onOpen: (id: string) => void;
 
       {/* rows */}
       {loading && <div style={{ fontSize: 13, color: 'var(--ink-mute)', padding: '8px 0' }}>Loading sessions…</div>}
-      {!loading && filtered.length === 0 && (
+      {!loading && error && sessions.length === 0 && (
+        <div className="panel">
+          <div className="empty-state">
+            <div className="empty-icon"><Icon name="phone-off" size={26} /></div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)' }}>Couldn’t load your history</div>
+            <div style={{ fontSize: 13, color: 'var(--ink-mute)', maxWidth: 380, lineHeight: 1.6 }}>{error}</div>
+          </div>
+        </div>
+      )}
+      {!loading && !error && filtered.length === 0 && (
         <div className="panel">
           <div className="empty-state">
             <div className="empty-icon"><Icon name="clock" size={26} /></div>
@@ -166,7 +185,7 @@ export function HistoryList({ onOpen, onStart }: { onOpen: (id: string) => void;
                   <span className="pill-neutral">{s.difficulty}</span>
                 </div>
                 <span style={{ fontSize: 11.5, color: preparing ? 'var(--brand)' : 'var(--ink-mute)', fontWeight: preparing ? 700 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
-                  {preparing ? 'Scorecard being prepared…' : failed ? 'Couldn’t prepare scorecard' : `Key objection: ${s.objection}`}
+                  {preparing ? 'Scorecard being prepared…' : failed ? 'Couldn’t prepare scorecard' : s.objection ? `Key objection: ${s.objection}` : ''}
                 </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, width: 120, flexShrink: 0 }}>
