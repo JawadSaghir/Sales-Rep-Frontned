@@ -19,6 +19,7 @@ export interface ScorecardItem {
 
 export interface SessionSummary {
   id: string;
+  status: 'evaluating' | 'evaluated' | 'eval_failed';
   score: number; // 0–100
   grade: string; // "B · Solid"
   persona: string;
@@ -51,10 +52,20 @@ export function scoreColor(score: number): string {
 // Both hit the real backend. The API returns these exact shapes (built server
 // side in api/history_view.py), so no client-side mapping is needed.
 
+export interface PendingSession {
+  id: string;
+  status: 'evaluating' | 'eval_failed';
+}
+
 export function getSessions(): Promise<SessionSummary[]> {
   return get<SessionSummary[]>('/api/sessions');
 }
 
-export function getSession(id: string): Promise<SessionDetail> {
-  return get<SessionDetail>(`/api/sessions/${id}`);
+export function getSession(id: string): Promise<SessionDetail | PendingSession> {
+  return get<SessionDetail | PendingSession>(`/api/sessions/${id}`);
+}
+
+// A pending/failed session has no scorecard; a full detail always does.
+export function isPending(s: SessionDetail | PendingSession): s is PendingSession {
+  return !('scorecard' in s);
 }
