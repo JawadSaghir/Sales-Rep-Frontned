@@ -6,7 +6,7 @@ interface ApiResponse<T> {
   error: string | null;
 }
 
-async function get<T>(path: string): Promise<T> {
+export async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`);
   const body: ApiResponse<T> = await res.json();
   if (!res.ok || !body.success || body.data === null) {
