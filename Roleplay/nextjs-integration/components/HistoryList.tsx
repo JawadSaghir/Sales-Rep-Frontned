@@ -41,44 +41,10 @@ function StatCard({ label, value, sub, delta, deltaColor }: { label: string; val
 export function HistoryList({ onOpen, onStart }: { onOpen: (id: string) => void; onStart: () => void }) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    let alive = true;
-    let timer: ReturnType<typeof setInterval> | undefined;
-
-    const refresh = async () => {
-      try {
-        const data = await getSessions();
-        if (!alive) return;
-        setSessions(data);
-        setError(null);
-        // Poll through the whole pipeline, not just the eval step: a call that
-        // just ended is "preparing" for ~25s before it ever reaches
-        // "evaluating", and stopping there would freeze the list on a snapshot
-        // taken before the scorecard existed.
-        const anyPending = data.some(
-          s => s.status === 'preparing' || s.status === 'evaluating'
-        );
-        if (anyPending && !timer) {
-          timer = setInterval(refresh, 4000);
-        } else if (!anyPending && timer) {
-          clearInterval(timer);
-          timer = undefined;
-        }
-      } catch (e: unknown) {
-        // Don't let an outage look like an empty history. The interval (if any)
-        // keeps ticking and recovers on the next successful poll.
-        if (!alive) return;
-        setError(e instanceof Error ? e.message : 'Could not load sessions.');
-      } finally {
-        if (alive) setLoading(false);
-      }
-    };
-
-    refresh();
-    return () => { alive = false; if (timer) clearInterval(timer); };
+    getSessions().then(setSessions).finally(() => setLoading(false));
   }, []);
 
   const filtered = useMemo(() => {
@@ -89,11 +55,10 @@ export function HistoryList({ onOpen, onStart }: { onOpen: (id: string) => void;
     );
   }, [sessions, search]);
 
-  const evaluated = sessions.filter(s => s.status === 'evaluated');
-  const avg = evaluated.length ? Math.round(evaluated.reduce((a, s) => a + s.score, 0) / evaluated.length) : 0;
+  const avg = sessions.length ? Math.round(sessions.reduce((a, s) => a + s.score, 0) / sessions.length) : 0;
 
   return (
-    <div className="fade-up" style={{ padding: '32px 40px', width: '100%' }}>
+    <div className="fade-up" style={{ padding: '32px 36px', maxWidth: 960, width: '100%', margin: '0 auto' }}>
       {/* header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 22 }}>
         <div className="empty-icon" style={{ width: 44, height: 44 }}>
@@ -137,16 +102,7 @@ export function HistoryList({ onOpen, onStart }: { onOpen: (id: string) => void;
 
       {/* rows */}
       {loading && <div style={{ fontSize: 13, color: 'var(--ink-mute)', padding: '8px 0' }}>Loading sessions…</div>}
-      {!loading && error && sessions.length === 0 && (
-        <div className="panel">
-          <div className="empty-state">
-            <div className="empty-icon"><Icon name="phone-off" size={26} /></div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)' }}>Couldn’t load your history</div>
-            <div style={{ fontSize: 13, color: 'var(--ink-mute)', maxWidth: 380, lineHeight: 1.6 }}>{error}</div>
-          </div>
-        </div>
-      )}
-      {!loading && !error && filtered.length === 0 && (
+      {!loading && filtered.length === 0 && (
         <div className="panel">
           <div className="empty-state">
             <div className="empty-icon"><Icon name="clock" size={26} /></div>
@@ -162,58 +118,36 @@ export function HistoryList({ onOpen, onStart }: { onOpen: (id: string) => void;
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {filtered.map(s => {
-          const preparing = s.status === 'preparing';
-          const evaluating = s.status === 'evaluating';
-          const pending = preparing || evaluating;
-          const failed = s.status === 'eval_failed';
-          return (
-            <button key={s.id} type="button" className="session-row" onClick={() => onOpen(s.id)}>
-              {s.status === 'evaluated' ? (
-                <ScoreRing score={s.score} />
-              ) : (
-                <div style={{ width: 52, height: 52, flexShrink: 0, display: 'grid', placeItems: 'center' }}>
-                  <span className={`live-dot ${failed ? 'off' : 'on'}`} />
-                </div>
-              )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 11, width: 224, flexShrink: 0, minWidth: 0 }}>
-                <span className="avatar" style={{ width: 36, height: 36 }}>{initialsOf(s.persona)}</span>
-                <span style={{ minWidth: 0, textAlign: 'left' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>
-                    {s.persona} <span className="tag">AI</span>
-                  </span>
-                  <span style={{ display: 'block', fontSize: 11, color: 'var(--ink-mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {s.business}
-                  </span>
+        {filtered.map(s => (
+          <button key={s.id} type="button" className="session-row" onClick={() => onOpen(s.id)}>
+            <ScoreRing score={s.score} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 11, width: 224, flexShrink: 0, minWidth: 0 }}>
+              <span className="avatar" style={{ width: 36, height: 36 }}>{initialsOf(s.persona)}</span>
+              <span style={{ minWidth: 0, textAlign: 'left' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>
+                  {s.persona} <span className="tag">AI</span>
                 </span>
+                <span style={{ display: 'block', fontSize: 11, color: 'var(--ink-mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {s.business}
+                </span>
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0, alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <span className="pill-brand">{s.callType}</span>
+                <span className="pill-neutral">{s.difficulty}</span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0, alignItems: 'flex-start' }}>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <span className="pill-brand">{s.callType}</span>
-                  <span className="pill-neutral">{s.difficulty}</span>
-                </div>
-                <span style={{ fontSize: 11.5, color: pending ? 'var(--brand)' : 'var(--ink-mute)', fontWeight: pending ? 700 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
-                  {preparing
-                    ? 'Preparing transcript…'
-                    : evaluating
-                    ? 'Scorecard being prepared…'
-                    : failed
-                    ? 'Couldn’t prepare scorecard'
-                    : s.objection ? `Key objection: ${s.objection}` : ''}
-                </span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, width: 120, flexShrink: 0 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)' }}>
-                  {preparing ? 'Preparing…' : evaluating ? 'Scoring…' : failed ? 'Failed' : s.grade}
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>
-                  {pending ? 'just now' : `${s.date} · ${s.duration}`}
-                </span>
-              </div>
-              <Icon name="chevron-right" size={16} style={{ color: 'var(--ink-faint)', flexShrink: 0 }} />
-            </button>
-          );
-        })}
+              <span style={{ fontSize: 11.5, color: 'var(--ink-mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+                Key objection: {s.objection}
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, width: 120, flexShrink: 0 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)' }}>{s.grade}</span>
+              <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{s.date} · {s.duration}</span>
+            </div>
+            <Icon name="chevron-right" size={16} style={{ color: 'var(--ink-faint)', flexShrink: 0 }} />
+          </button>
+        ))}
       </div>
     </div>
   );

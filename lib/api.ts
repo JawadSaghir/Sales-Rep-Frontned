@@ -7,7 +7,10 @@ interface ApiResponse<T> {
 }
 
 export async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`);
+  // Every one of these is live data, and History polls a session through
+  // preparing -> evaluating -> evaluated. A cached 200 would make the poll
+  // re-read its own stale answer and the scorecard would never appear.
+  const res = await fetch(`${BASE}${path}`, { cache: 'no-store' });
   const body: ApiResponse<T> = await res.json();
   if (!res.ok || !body.success || body.data === null) {
     throw new Error(body.error ?? `Request failed: ${path}`);

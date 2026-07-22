@@ -26,6 +26,9 @@ export type IconName =
   | 'clock'
   | 'target'
   | 'trophy'
+  | 'plus'
+  | 'user-plus'
+  | 'x'
   | 'wave';
 
 const PATHS: Record<IconName, React.ReactNode> = {
@@ -128,6 +131,15 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   wave: <path d="M2 12c2 0 2-4 4-4s2 8 4 8 2-12 4-12 2 8 4 8 2-4 2-4" />,
+  plus: <path d="M12 5v14M5 12h14" />,
+  x: <path d="M18 6 6 18M6 6l12 12" />,
+  'user-plus': (
+    <>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M19 8v6M22 11h-6" />
+    </>
+  ),
 };
 
 interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {

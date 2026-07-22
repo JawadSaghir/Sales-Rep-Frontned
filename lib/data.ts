@@ -1,6 +1,6 @@
 import type { IconName } from './icons';
 
-export type Tab = 'home' | 'Roleplay History' | 'Analytics' | 'Ask Sales FAQ';
+export type Tab = 'home' | 'Roleplay History' | 'Analytics' | 'FAQ';
 
 export interface NavItem {
   icon: IconName;
@@ -12,10 +12,10 @@ export const NAV_ITEMS: NavItem[] = [
   { icon: 'roleplay', label: 'home' }, // rendered with a custom label in the sidebar
   { icon: 'history', label: 'Roleplay History' },
   { icon: 'analytics', label: 'Analytics' },
-  { icon: 'faq', label: 'Ask Sales FAQ', badge: true },
+  { icon: 'faq', label: 'FAQ', badge: true },
 ];
 
-/** Static, professionally-written FAQ content for the "Ask Sales FAQ" tab. */
+/** Static, professionally-written FAQ content for the "FAQ" tab. */
 export const FAQS: { q: string; a: string }[] = [
   {
     q: 'How do AI roleplays work?',

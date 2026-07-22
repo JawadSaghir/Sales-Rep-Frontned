@@ -2,7 +2,7 @@
 // components/SessionDetail.tsx — session detail: transcript + coaching rail (design 1b).
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../lib/icons';
-import { getSession, initialsOf, isPending, type PendingSession, type SessionDetail as Detail } from '../lib/history';
+import { getSession, initialsOf, scoreColor, type SessionDetail as Detail } from '../lib/history';
 
 function fmt(sec: number): string {
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
@@ -10,8 +10,6 @@ function fmt(sec: number): string {
 
 function Sparkline({ points }: { points: number[] }) {
   const w = 360, h = 40, pad = 4;
-  // One point can't make a line (i/(length-1) would divide by zero -> NaN path).
-  if (points.length < 2) return null;
   const max = Math.max(...points, 1), min = Math.min(...points, 0);
   const xy = points.map((p, i) => [
     (i / (points.length - 1)) * w,
@@ -27,89 +25,24 @@ function Sparkline({ points }: { points: number[] }) {
 }
 
 export function SessionDetail({ id, onBack, onRetry }: { id: string; onBack: () => void; onRetry: () => void }) {
-  const [detail, setDetail] = useState<Detail | PendingSession | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<Detail | null>(null);
   const [playing, setPlaying] = useState(false);
   const [sec, setSec] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval>>();
 
-  // Poll while the eval is still running so the scorecard fills in on its own.
   useEffect(() => {
-    let alive = true;
-    let poll: ReturnType<typeof setInterval> | undefined;
-    const stop = () => { if (poll) { clearInterval(poll); poll = undefined; } };
-    const load = async () => {
-      try {
-        const d = await getSession(id);
-        if (!alive) return;
-        setDetail(d);
-        setError(null);
-        if (isPending(d) && (d.status === 'preparing' || d.status === 'evaluating')) {
-          if (!poll) poll = setInterval(load, 4000);
-        } else {
-          stop();
-        }
-      } catch (e: unknown) {
-        if (!alive) return;
-        // Leave any already-loaded detail on screen; a poll can fail transiently.
-        setError(e instanceof Error ? e.message : 'Could not load this session.');
-      }
-    };
-    // Opening a different session must not inherit the previous one's clock.
-    setPlaying(false);
-    setSec(0);
-    load();
-    return () => { alive = false; stop(); };
+    getSession(id).then(setDetail);
   }, [id]);
 
-  // Transcript playback clock. Only runs while actually playing on a session
-  // that has a real duration — `% 0` would yield NaN on a 0:00 (no-transcript) call.
   useEffect(() => {
-    if (!playing || !detail || isPending(detail) || !detail.durationSec) return;
-    const dur = detail.durationSec;
-    timer.current = setInterval(() => setSec(s => (s + 1) % dur), 1000);
+    timer.current = setInterval(() => {
+      if (playing && detail) setSec(s => (s + 1) % detail.durationSec);
+    }, 1000);
     return () => clearInterval(timer.current);
   }, [playing, detail]);
 
   if (!detail) {
-    return (
-      <div style={{ padding: 32, fontSize: 13, color: error ? 'var(--brand)' : 'var(--ink-mute)' }}>
-        {error ? `Couldn’t load this session: ${error}` : 'Loading session…'}
-      </div>
-    );
-  }
-
-  // Not evaluated yet: the scorecard/transcript don't exist, so render the
-  // waiting (or failed) state instead of the full report.
-  if (isPending(detail)) {
-    const failed = detail.status === 'eval_failed';
-    const preparing = detail.status === 'preparing';
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 24px', background: 'var(--surface)', borderBottom: '1px solid var(--line)' }}>
-          <button type="button" className="btn btn-ghost" style={{ padding: '8px 12px', fontSize: 12 }} onClick={onBack}>
-            <Icon name="chevron-left" size={14} /> History
-          </button>
-        </div>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
-          <span className={`live-dot ${failed ? 'off' : 'on'}`} />
-          <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--ink)' }}>
-            {failed
-              ? 'Couldn’t prepare this scorecard'
-              : preparing
-              ? 'Preparing your transcript…'
-              : 'Preparing your scorecard…'}
-          </div>
-          <div style={{ fontSize: 12.5, color: 'var(--ink-mute)', maxWidth: 360, textAlign: 'center', lineHeight: 1.6 }}>
-            {failed
-              ? 'The evaluation could not be completed for this call. You can start a new roleplay and try again.'
-              : preparing
-              ? 'Your call just ended. We’re collecting the recording and transcript — scoring starts as soon as it lands.'
-              : 'We’re scoring your call and writing coaching notes. This updates automatically in a few seconds.'}
-          </div>
-        </div>
-      </div>
-    );
+    return <div style={{ padding: 32, fontSize: 13, color: 'var(--ink-mute)' }}>Loading session…</div>;
   }
 
   const totalEarned = detail.scorecard.reduce((a, c) => a + c.earned, 0);
@@ -161,7 +94,7 @@ export function SessionDetail({ id, onBack, onRetry }: { id: string; onBack: () 
             </button>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
               <div style={{ height: 6, borderRadius: 999, background: 'var(--surface-3)', position: 'relative', overflow: 'hidden' }}>
-                <div style={{ position: 'absolute', inset: '0 auto 0 0', width: detail.durationSec ? `${(sec / detail.durationSec) * 100}%` : '0%', background: 'linear-gradient(90deg, var(--brand-strong), var(--brand))', borderRadius: 999 }} />
+                <div style={{ position: 'absolute', inset: '0 auto 0 0', width: `${(sec / detail.durationSec) * 100}%`, background: 'linear-gradient(90deg, var(--brand-strong), var(--brand))', borderRadius: 999 }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, fontWeight: 600, color: 'var(--ink-mute)' }}>
                 <span>{fmt(sec)}</span><span>{detail.duration}</span>

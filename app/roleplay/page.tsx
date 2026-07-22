@@ -10,6 +10,7 @@ import {
   useVoiceAssistant,
 } from '@livekit/components-react';
 import { startSession, type StartSessionResult } from '../../lib/api';
+import { callTypeLabelFromSlug } from '../../lib/roleplay';
 import { Icon } from '../../lib/icons';
 
 function labelFromSlug(slug: string, fallback: string): string {
@@ -314,7 +315,7 @@ function RoleplayInner() {
   const personaSlug = searchParams.get('persona_slug') ?? '';
   const difficulty = searchParams.get('difficulty') ?? '';
   const repLabel = labelFromSlug(repSlug, 'Trainee');
-  const callTypeLabel = labelFromSlug(callTypeSlug, 'Roleplay Call');
+  const callTypeLabel = callTypeLabelFromSlug(callTypeSlug);
   const personaLabel = labelFromSlug(personaSlug, '');
 
   useEffect(() => {
@@ -367,7 +368,7 @@ function RoleplayInner() {
         repLabel={repLabel}
         callTypeLabel={callTypeLabel}
         personaLabel={personaLabel}
-        onLeave={() => router.push('/?tab=analytics')}
+        onLeave={() => router.push('/?tab=history')}
       />
     </LiveKitRoom>
   );

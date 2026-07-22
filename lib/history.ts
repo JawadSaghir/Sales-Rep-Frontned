@@ -17,9 +17,16 @@ export interface ScorecardItem {
   total: number;
 }
 
+// The UI state machine, in order:
+//   preparing  — call ended, waiting for the agent to hand over the transcript
+//   evaluating — transcript in, scorecard being written
+//   evaluated  — finished
+//   eval_failed— gave up (no transcript, or the eval itself failed)
+export type SessionStatus = 'preparing' | 'evaluating' | 'evaluated' | 'eval_failed';
+
 export interface SessionSummary {
   id: string;
-  status: 'evaluating' | 'evaluated' | 'eval_failed';
+  status: SessionStatus;
   score: number; // 0–100
   grade: string; // "B · Solid"
   persona: string;
@@ -54,7 +61,7 @@ export function scoreColor(score: number): string {
 
 export interface PendingSession {
   id: string;
-  status: 'evaluating' | 'eval_failed';
+  status: Exclude<SessionStatus, 'evaluated'>;
 }
 
 export function getSessions(): Promise<SessionSummary[]> {

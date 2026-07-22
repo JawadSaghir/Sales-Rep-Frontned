@@ -11,6 +11,7 @@
   --brand-strong: #7a1f1f;
   --brand-soft: #fdecea;
   --brand-softer: #fef5f3;
+  --brand-tint: #fef5f3;   /* selected persona-card fill (RoleplaySetup) */
   --brand-line: #f2c9c4;
 
   /* Status */
@@ -472,6 +473,46 @@ button {
   border-color: var(--brand);
 }
 
+/* Roleplay History session rows + status pills (HistoryList / SessionDetail) */
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: var(--r-md);
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+}
+.session-row:hover {
+  border-color: var(--brand-line);
+  box-shadow: var(--shadow-xs);
+}
+.pill-brand,
+.pill-neutral {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+}
+.pill-brand {
+  color: var(--brand-ink);
+  background: var(--brand-softer);
+  border: 1px solid var(--brand-line);
+}
+.pill-neutral {
+  color: var(--ink-soft);
+  background: var(--surface-inset);
+  border: 1px solid var(--line);
+}
+
 /* ------------------------------------------------------------------ Tokens */
 .avatar {
   width: 34px;
@@ -712,6 +753,56 @@ button {
 }
 .fade-up {
   animation: fade-up 320ms var(--ease) both;
+}
+
+/* Alias: RoleplaySetup's custom-persona modal references `fadeUp` by name. */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---------------------------------------------------- AI Sales Roleplays (2a) */
+.persona-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 15px;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.persona-card:hover {
+  border-color: var(--brand-line) !important;
+  box-shadow: var(--shadow-xs);
+}
+.persona-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 110px;
+  padding: 14px 15px;
+  border-radius: var(--r-md);
+  border: 1.5px dashed var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink-mute);
+  cursor: pointer;
+  text-align: center;
+  font-family: inherit;
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.persona-add:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: var(--brand-tint);
 }
 
 /* --------------------------------------------------------------- Responsive */
