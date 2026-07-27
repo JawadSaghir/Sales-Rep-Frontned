@@ -875,22 +875,12 @@ button {
   margin-bottom: 32px;
 }
 .auth-mark {
-  display: grid;
-  place-items: center;
-  width: 64px;
-  height: 64px;
+  display: block;
+  width: 72px;
+  height: 72px;
   border-radius: 22px;
-  background: linear-gradient(145deg, var(--brand), var(--brand-ink));
-  color: #fff;
-  box-shadow: 0 14px 32px -10px rgba(192, 57, 43, 0.75);
-}
-.auth-kicker {
-  margin-top: 16px;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
+  object-fit: cover;
+  box-shadow: 0 14px 32px -10px rgba(20, 22, 27, 0.55);
 }
 .auth-card {
   padding: 40px 32px;

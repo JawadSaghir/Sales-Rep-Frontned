@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import { signIn } from '../../auth';
 import { Icon } from '../../lib/icons';
 import { GoogleSignInButton } from '../../components/google-sign-in-button';
@@ -26,10 +27,14 @@ export default function SignInPage({
     <main className="auth-page">
       <div className="auth-shell">
         <div className="auth-brand">
-          <span className="auth-mark">
-            <Icon name="roleplay" size={34} strokeWidth={2} />
-          </span>
-          <span className="auth-kicker">Inside Success TV</span>
+          <Image
+            src="/insidesuccess-logo.jpg"
+            alt="Inside Success"
+            width={72}
+            height={72}
+            priority
+            className="auth-mark"
+          />
         </div>
 
         <section className="card auth-card">

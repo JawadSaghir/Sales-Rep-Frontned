@@ -20,21 +20,56 @@ async function mintToken(email: string): Promise<string> {
     .sign(new TextEncoder().encode(secret));
 }
 
+/** Every response this route returns MUST be the ApiResponse envelope, because
+ *  lib/api.ts parses the body as JSON unconditionally. An uncaught throw here
+ *  yields Next's own 500 page, whose body is not JSON — so res.json() raises a
+ *  SyntaxError and the browser shows a parse failure instead of the real cause.
+ *  A misconfiguration has to arrive readable, the same reason CORS wraps the
+ *  API's 401s (api/main.py). */
+function fail(status: number, error: string): Response {
+  return Response.json({ success: false, data: null, error }, { status });
+}
+
+function message(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 async function proxy(req: Request, params: { path: string[] }): Promise<Response> {
   const session = await auth();
   const email = session?.user?.email;
-  if (!email) return Response.json({ success: false, data: null, error: 'signed out' }, { status: 401 });
+  if (!email) return fail(401, 'signed out');
+
+  let token: string;
+  try {
+    token = await mintToken(email);
+  } catch (err) {
+    // Server-side misconfiguration (missing or unusable USER_PROXY_SECRET), not
+    // an upstream problem — 500, and say so in the terminal too.
+    console.error('[bff] cannot mint internal token:', message(err));
+    return fail(500, message(err));
+  }
+
   const url = new URL(req.url);
   const target = `${BACKEND}/api/${params.path.join('/')}${url.search}`;
-  const upstream = await fetch(target, {
-    method: req.method,
-    headers: {
-      Authorization: `Bearer ${await mintToken(email)}`,
-      'content-type': req.headers.get('content-type') ?? 'application/json',
-    },
-    body: req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.text(),
-    cache: 'no-store',
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(target, {
+      method: req.method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'content-type': req.headers.get('content-type') ?? 'application/json',
+      },
+      body: req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.text(),
+      cache: 'no-store',
+    });
+  } catch (err) {
+    // Distinguished from the 500 above on purpose: the API being down and the
+    // proxy being misconfigured look identical in the browser but need opposite
+    // fixes. 502 = "the thing behind me is unreachable".
+    console.error(`[bff] upstream unreachable at ${target}:`, message(err));
+    return fail(502, `cannot reach the API at ${BACKEND} — is it running?`);
+  }
+
   return new Response(await upstream.text(), {
     status: upstream.status,
     headers: { 'content-type': upstream.headers.get('content-type') ?? 'application/json' },
