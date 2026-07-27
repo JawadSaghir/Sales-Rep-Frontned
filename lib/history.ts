@@ -72,8 +72,24 @@ export interface PendingSession {
   duration?: string;
 }
 
-export function getSessions(): Promise<SessionSummary[]> {
-  return get<SessionSummary[]>('/api/sessions');
+export function getSessions(repSlug?: string): Promise<SessionSummary[]> {
+  const q = repSlug ? `?rep_slug=${encodeURIComponent(repSlug)}` : '';
+  return get<SessionSummary[]>(`/api/sessions${q}`);
+}
+
+// Admin-only aggregate: one row per rep, backed by GET /api/admin/roster
+// (403s for non-admins — the page renders that as "Admin access required").
+export interface RosterEntry {
+  rep_key: string;
+  label: string;
+  calls: number;
+  avg_score: number;
+  last_active: string;
+  trend: number[];
+}
+
+export function getRoster(): Promise<RosterEntry[]> {
+  return get<RosterEntry[]>('/api/admin/roster');
 }
 
 export function getSession(id: string): Promise<SessionDetail | PendingSession> {

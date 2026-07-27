@@ -38,7 +38,17 @@ function StatCard({ label, value, sub, delta, deltaColor }: { label: string; val
   );
 }
 
-export function HistoryList({ onOpen, onStart }: { onOpen: (id: string) => void; onStart: () => void }) {
+export function HistoryList({
+  onOpen,
+  onStart,
+  repSlug,
+}: {
+  onOpen: (id: string) => void;
+  onStart: () => void;
+  // Admin drill-in: scope the list to one rep's sessions (GET /api/sessions?rep_slug=…).
+  // Undefined -> the caller's own history, same as before this prop existed.
+  repSlug?: string;
+}) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +60,7 @@ export function HistoryList({ onOpen, onStart }: { onOpen: (id: string) => void;
 
     const refresh = async () => {
       try {
-        const data = await getSessions();
+        const data = await getSessions(repSlug);
         if (!alive) return;
         setSessions(data);
         setError(null);
@@ -79,7 +89,7 @@ export function HistoryList({ onOpen, onStart }: { onOpen: (id: string) => void;
 
     refresh();
     return () => { alive = false; if (timer) clearInterval(timer); };
-  }, []);
+  }, [repSlug]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
