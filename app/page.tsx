@@ -1,10 +1,12 @@
 'use client';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import { NAV_ITEMS, FAQS, type Tab } from '../lib/data';
 import { Icon, type IconName } from '../lib/icons';
 import {
+  getMe,
   getPersonas,
   getReps,
   getTeamWeaknesses,
@@ -27,7 +29,15 @@ function initialsOf(name: string): string {
 
 /* --------------------------------------------------------------- Sidebar */
 
-function Sidebar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
+function Sidebar({
+  active,
+  onChange,
+  isAdmin,
+}: {
+  active: Tab;
+  onChange: (t: Tab) => void;
+  isAdmin: boolean;
+}) {
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -76,6 +86,15 @@ function Sidebar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void
           Inside Success
         </div>
       </div>
+
+      {isAdmin && (
+        <Link href="/admin" className="nav-item">
+          <span className="nav-label">
+            <Icon name="target" size={18} />
+            <span>Admin</span>
+          </span>
+        </Link>
+      )}
 
       <button
         type="button"
@@ -244,6 +263,16 @@ function HomeInner() {
   const [reps, setReps] = useState<RepSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Drives the Admin nav link only (UI courtesy — the API is the real
+  // enforcement on every /api/admin/* route). A failed /me fetch just means
+  // no admin link, never an error state.
+  useEffect(() => {
+    getMe()
+      .then(me => setIsAdmin(me.is_admin))
+      .catch(() => setIsAdmin(false));
+  }, []);
 
   // Personas gate the setup screen — it can't render without them. The free-
   // tier API cold-starts in ~60s after idle, so returning visitors get the
@@ -315,6 +344,7 @@ function HomeInner() {
           if (t === 'Roleplay History') setHistoryOpenId(null); // nav click → list, not a stale detail
           setActiveTab(t);
         }}
+        isAdmin={isAdmin}
       />
 
       <main style={{ minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>

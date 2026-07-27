@@ -56,6 +56,11 @@ export interface StartSessionResult {
   livekit_url: string;
 }
 
+export interface Me {
+  email: string;
+  is_admin: boolean;
+}
+
 export const getCallTypes = () => get<CallType[]>('/api/call-types');
 export const getPersonas = () => get<Persona[]>('/api/personas');
 export const getDifficulties = () => get<Difficulty[]>('/api/difficulties');
@@ -63,6 +68,9 @@ export const getReps = () => get<RepSummary[]>('/api/reps');
 export const getRepProfile = (slug: string) => get<Record<string, unknown>>(`/api/reps/${slug}`);
 export const getTeamWeaknesses = () =>
   get<{ objection_type: string; count: number }[]>('/api/analytics/team-weaknesses');
+// Drives the Admin nav link only — a UI courtesy. The API enforces the real
+// admin check on every /api/admin/* route regardless of what this returns.
+export const getMe = () => get<Me>('/api/me');
 
 export async function startSession(body: {
   call_type: string;
