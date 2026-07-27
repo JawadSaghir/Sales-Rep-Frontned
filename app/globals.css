@@ -958,3 +958,13 @@ button {
     transform: rotate(360deg);
   }
 }
+
+/* Sidebar sign-out — nav-item shape, exit-red hover */
+.nav-signout {
+  margin-top: 6px;
+  color: var(--ink-mute);
+}
+.nav-signout:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}

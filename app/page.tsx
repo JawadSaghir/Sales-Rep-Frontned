@@ -1,6 +1,7 @@
 'use client';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { signOut } from 'next-auth/react';
 import { NAV_ITEMS, FAQS, type Tab } from '../lib/data';
 import { Icon, type IconName } from '../lib/icons';
 import {
@@ -75,6 +76,17 @@ function Sidebar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void
           Inside Success
         </div>
       </div>
+
+      <button
+        type="button"
+        className="nav-item nav-signout"
+        onClick={() => signOut({ callbackUrl: '/sign-in' })}
+      >
+        <span className="nav-label">
+          <Icon name="log-out" size={18} />
+          <span>Sign out</span>
+        </span>
+      </button>
     </aside>
   );
 }
