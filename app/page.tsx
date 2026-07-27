@@ -233,13 +233,42 @@ function HomeInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Personas gate the setup screen — it can't render without them.
+  // Personas gate the setup screen — it can't render without them. The free-
+  // tier API cold-starts in ~60s after idle, so returning visitors get the
+  // last-known catalog from localStorage instantly (stale-while-revalidate)
+  // and the fresh fetch swaps in behind it. Only a first-ever visit (nothing
+  // cached) still waits on the network.
   useEffect(() => {
-    setLoading(true);
+    let cached: Persona[] | null = null;
+    try {
+      const raw = localStorage.getItem('istv_personas_v1');
+      if (raw) cached = JSON.parse(raw) as Persona[];
+    } catch {
+      cached = null; // corrupt cache — fall through to the network
+    }
+    if (cached && cached.length > 0) {
+      setPersonas(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setError(null);
     getPersonas()
-      .then(setPersonas)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Failed to load personas'))
+      .then((fresh) => {
+        setPersonas(fresh);
+        try {
+          localStorage.setItem('istv_personas_v1', JSON.stringify(fresh));
+        } catch {
+          /* storage full/blocked — the fetch still rendered */
+        }
+      })
+      .catch((e: unknown) => {
+        // With a cached catalog on screen, a background refresh failure is
+        // not worth an error screen; without one, it is.
+        if (!cached || cached.length === 0) {
+          setError(e instanceof Error ? e.message : 'Failed to load personas');
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 
