@@ -296,12 +296,10 @@ function HomeInner() {
   // API shape -> the setup screen's Persona shape.
   const roleplayPersonas = useMemo(() => personas.map(mapApiPersona), [personas]);
 
-  // The 2a setup screen has no rep/profile picker. rep_slug is just the identity
-  // label stored on the session (the API itself falls back to "rep"), so use the
-  // first rep when the roster has loaded and that same fallback otherwise.
+  // The 2a setup screen has no rep/profile picker. Rep identity now comes from
+  // the signed-in session on the server side, not a client-supplied slug.
   const startRoleplay = (config: RoleplayConfig) => {
     const query = new URLSearchParams({
-      rep_slug: reps[0]?.slug ?? 'rep',
       call_type: config.callTypeId,
       persona_slug: config.personaId,
       difficulty: config.difficulty.toLowerCase(),

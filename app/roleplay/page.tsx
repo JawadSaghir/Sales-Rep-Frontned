@@ -310,17 +310,19 @@ function RoleplayInner() {
   // which would spawn two rooms and two agents per call, so guard the request.
   const startedRef = useRef(false);
 
-  const repSlug = searchParams.get('rep_slug') ?? '';
+  // rep_slug is gone from the URL — identity now comes from the signed-in
+  // session (the BFF proxy attaches it), not a client-supplied slug. repLabel
+  // stays cosmetic and falls back to "Trainee" with nothing in the URL.
   const callTypeSlug = searchParams.get('call_type') ?? '';
   const personaSlug = searchParams.get('persona_slug') ?? '';
   const difficulty = searchParams.get('difficulty') ?? '';
-  const repLabel = labelFromSlug(repSlug, 'Trainee');
+  const repLabel = labelFromSlug(searchParams.get('rep_slug') ?? '', 'Trainee');
   const callTypeLabel = callTypeLabelFromSlug(callTypeSlug);
   const personaLabel = labelFromSlug(personaSlug, '');
 
   useEffect(() => {
-    if (!repSlug || !callTypeSlug || !personaSlug || !difficulty) {
-      setSessionError('Missing call setup — go back and select a rep, call type, persona, and difficulty.');
+    if (!callTypeSlug || !personaSlug || !difficulty) {
+      setSessionError('Missing call setup — go back and select a call type, persona, and difficulty.');
       setSessionLoading(false);
       return;
     }
@@ -332,11 +334,11 @@ function RoleplayInner() {
     // cleanup runs before the request resolves, so a cancelled-guard would
     // discard the only response we ever get (the ref guard stops the second run
     // from issuing another) — the room would be created but never joined.
-    startSession({ rep_slug: repSlug, call_type: callTypeSlug, persona_slug: personaSlug, difficulty })
+    startSession({ call_type: callTypeSlug, persona_slug: personaSlug, difficulty })
       .then(result => setSession(result))
       .catch((e: unknown) => setSessionError(e instanceof Error ? e.message : 'Failed to start session'))
       .finally(() => setSessionLoading(false));
-  }, [repSlug, callTypeSlug, personaSlug, difficulty]);
+  }, [callTypeSlug, personaSlug, difficulty]);
 
   if (sessionLoading) {
     return (

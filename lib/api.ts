@@ -1,4 +1,6 @@
-const BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:8000';
+// Same-origin BFF proxy (adds auth); FastAPI paths keep their /api prefix on
+// the upstream side, so strip it here: /api/personas -> /api/backend/personas.
+const BASE = '/api/backend';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -10,7 +12,7 @@ export async function get<T>(path: string): Promise<T> {
   // Every one of these is live data, and History polls a session through
   // preparing -> evaluating -> evaluated. A cached 200 would make the poll
   // re-read its own stale answer and the scorecard would never appear.
-  const res = await fetch(`${BASE}${path}`, { cache: 'no-store' });
+  const res = await fetch(`${BASE}${path.replace(/^\/api/, '')}`, { cache: 'no-store' });
   const body: ApiResponse<T> = await res.json();
   if (!res.ok || !body.success || body.data === null) {
     throw new Error(body.error ?? `Request failed: ${path}`);
@@ -63,12 +65,11 @@ export const getTeamWeaknesses = () =>
   get<{ objection_type: string; count: number }[]>('/api/analytics/team-weaknesses');
 
 export async function startSession(body: {
-  rep_slug: string;
   call_type: string;
   persona_slug: string;
   difficulty: string;
 }): Promise<StartSessionResult> {
-  const res = await fetch(`${BASE}/api/sessions`, {
+  const res = await fetch(`${BASE}/sessions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
