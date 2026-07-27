@@ -79,35 +79,86 @@ export function SessionDetail({ id, onBack, onRetry }: { id: string; onBack: () 
     );
   }
 
-  // Not evaluated yet: the scorecard/transcript don't exist, so render the
-  // waiting (or failed) state instead of the full report.
+  // Not evaluated yet: render the waiting (or failed) state. The transcript
+  // exists BEFORE the scorecard (the API stores it the moment the call ends),
+  // so when it's present we show it immediately under a slim status banner —
+  // the rep reads the call while scoring runs instead of staring at a spinner.
   if (isPending(detail)) {
     const failed = detail.status === 'eval_failed';
     const preparing = detail.status === 'preparing';
+    const pendingTranscript = detail.transcript ?? [];
+    const personaName = detail.persona || 'Prospect';
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 24px', background: 'var(--surface)', borderBottom: '1px solid var(--line)' }}>
           <button type="button" className="btn btn-ghost" style={{ padding: '8px 12px', fontSize: 12 }} onClick={onBack}>
             <Icon name="chevron-left" size={14} /> History
           </button>
+          {pendingTranscript.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0, flex: 1 }}>
+              <span className="avatar" style={{ width: 36, height: 36 }}>{initialsOf(personaName)}</span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 800, color: 'var(--ink)' }}>
+                  {personaName} <span className="tag">AI</span>
+                  {detail.callType && <span className="pill-brand">{detail.callType}</span>}
+                  {detail.difficulty && <span className="pill-neutral">{detail.difficulty}</span>}
+                </div>
+                {detail.duration && (
+                  <div style={{ fontSize: 11.5, color: 'var(--ink-mute)' }}>{detail.duration} duration</div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+        {/* status banner — slim when the transcript is already readable */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 24px', background: failed ? 'var(--brand-soft)' : 'var(--surface-inset)', borderBottom: '1px solid var(--line)' }}>
           <span className={`live-dot ${failed ? 'off' : 'on'}`} />
-          <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--ink)' }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)' }}>
             {failed
               ? 'Couldn’t prepare this scorecard'
               : preparing
               ? 'Preparing your transcript…'
-              : 'Preparing your scorecard…'}
+              : 'Writing your scorecard…'}
           </div>
-          <div style={{ fontSize: 12.5, color: 'var(--ink-mute)', maxWidth: 360, textAlign: 'center', lineHeight: 1.6 }}>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-mute)' }}>
             {failed
-              ? 'The evaluation could not be completed for this call. You can start a new roleplay and try again.'
+              ? 'The evaluation could not be completed for this call.'
               : preparing
-              ? 'Your call just ended. We’re collecting the recording and transcript — scoring starts as soon as it lands.'
-              : 'We’re scoring your call and writing coaching notes. This updates automatically in a few seconds.'}
+              ? 'Your call just ended — the transcript lands here first.'
+              : 'Read your transcript below — coaching notes appear here automatically when ready.'}
           </div>
         </div>
+        {pendingTranscript.length === 0 ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+            <div style={{ fontSize: 12.5, color: 'var(--ink-mute)', maxWidth: 360, textAlign: 'center', lineHeight: 1.6 }}>
+              {failed
+                ? 'You can start a new roleplay and try again.'
+                : 'This updates automatically in a few seconds.'}
+            </div>
+          </div>
+        ) : (
+          <div className="scroll-y" style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {pendingTranscript.map((m, i) => {
+              const isRep = m.speaker === 'rep';
+              return (
+                <div key={i} style={{ display: 'flex', gap: 11, flexDirection: isRep ? 'row-reverse' : 'row' }}>
+                  <span style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 700, background: isRep ? 'var(--ink)' : 'var(--surface-3)', color: isRep ? '#fff' : 'var(--ink-soft)' }}>
+                    {isRep ? 'You' : initialsOf(personaName)}
+                  </span>
+                  <div style={{ maxWidth: '76%', display: 'flex', flexDirection: 'column', gap: 4, alignItems: isRep ? 'flex-end' : 'flex-start' }}>
+                    <div style={{ display: 'flex', gap: 7, alignItems: 'baseline' }}>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink)' }}>{isRep ? 'You' : personaName}</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink-faint)', fontFamily: 'var(--font-mono)' }}>{m.time}</span>
+                    </div>
+                    <div style={{ padding: '10px 13px', borderRadius: 12, fontSize: 12.5, lineHeight: 1.55, background: isRep ? 'var(--brand-soft)' : 'var(--surface-inset)', color: 'var(--ink)', border: `1px solid ${isRep ? 'var(--brand-line)' : 'var(--line)'}` }}>
+                      {m.text}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }

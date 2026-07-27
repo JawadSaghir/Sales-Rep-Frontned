@@ -62,6 +62,14 @@ export function scoreColor(score: number): string {
 export interface PendingSession {
   id: string;
   status: Exclude<SessionStatus, 'evaluated'>;
+  // Present once /complete has stored the turns (evaluating / eval_failed):
+  // the transcript exists BEFORE the scorecard, so the UI can show it while
+  // scoring runs instead of a bare spinner. Absent while still "preparing".
+  transcript?: TranscriptMessage[];
+  persona?: string;
+  callType?: string;
+  difficulty?: string;
+  duration?: string;
 }
 
 export function getSessions(): Promise<SessionSummary[]> {
