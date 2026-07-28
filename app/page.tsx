@@ -18,6 +18,14 @@ import { SessionDetail } from '../components/SessionDetail';
 import { RoleplaySetup } from '../components/RoleplaySetup';
 import { mapApiPersona, type RoleplayConfig } from '../lib/roleplay';
 
+const PERSONA_CACHE_KEY = 'istv_personas_v2';
+const LEGACY_PERSONA_CACHE_KEY = 'istv_personas_v1';
+const HIDDEN_PERSONA_SLUGS = new Set(['charlie-ritenour']);
+
+function visiblePersonas(items: Persona[]): Persona[] {
+  return items.filter(persona => !HIDDEN_PERSONA_SLUGS.has(persona.slug));
+}
+
 function initialsOf(name: string): string {
   return name
     .split(' ')
@@ -282,8 +290,9 @@ function HomeInner() {
   useEffect(() => {
     let cached: Persona[] | null = null;
     try {
-      const raw = localStorage.getItem('istv_personas_v1');
-      if (raw) cached = JSON.parse(raw) as Persona[];
+      localStorage.removeItem(LEGACY_PERSONA_CACHE_KEY);
+      const raw = localStorage.getItem(PERSONA_CACHE_KEY);
+      if (raw) cached = visiblePersonas(JSON.parse(raw) as Persona[]);
     } catch {
       cached = null; // corrupt cache — fall through to the network
     }
@@ -296,9 +305,10 @@ function HomeInner() {
     setError(null);
     getPersonas()
       .then((fresh) => {
-        setPersonas(fresh);
+        const visible = visiblePersonas(fresh);
+        setPersonas(visible);
         try {
-          localStorage.setItem('istv_personas_v1', JSON.stringify(fresh));
+          localStorage.setItem(PERSONA_CACHE_KEY, JSON.stringify(visible));
         } catch {
           /* storage full/blocked — the fetch still rendered */
         }
