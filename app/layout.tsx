@@ -4,7 +4,7 @@ import './globals.css';
 // The favicon and apple-touch icon come from app/icon.png and app/apple-icon.png
 // (Next.js file conventions) — no <link> tags needed here.
 export const metadata: Metadata = {
-  title: 'AI CAST MEMBER',
+  title: 'ISTV AI MOCK Calls sales rep training',
   description: 'AI sales roleplay training — rehearse objection handling against realistic buyers.',
 };
 

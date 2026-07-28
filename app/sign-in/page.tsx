@@ -5,7 +5,7 @@ import { Icon } from '../../lib/icons';
 import { GoogleSignInButton } from '../../components/google-sign-in-button';
 
 export const metadata: Metadata = {
-  title: 'Sign in | AI Cast Member',
+  title: 'Sign in | ISTV AI MOCK Calls sales rep training',
   robots: {
     index: false,
     follow: false,
@@ -39,13 +39,14 @@ export default function SignInPage({
 
         <section className="card auth-card">
           <h1 className="auth-title">
-            Welcome to AI Cast <span className="accent">Member</span>
+            Welcome to ISTV AI MOCK Calls <span className="accent">Sales Rep Training</span>
           </h1>
           <p className="auth-sub">Sign in to start your sales roleplay training.</p>
 
           {error ? (
             <div className="auth-error">
-              This Google account is not approved for AI Cast Member. Use your Inside Success TV,
+              This Google account is not approved for ISTV AI MOCK Calls sales rep training. Use
+              your Inside Success TV,
               Inside Success, Mawer Capital, or Next Level CEO TV email.
             </div>
           ) : null}

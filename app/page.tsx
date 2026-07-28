@@ -45,8 +45,8 @@ function Sidebar({
           <Icon name="wave" size={20} />
         </div>
         <div className="collapse-hide" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span className="brand-name">AI CAST MEMBER</span>
-          <span className="brand-sub">INSIDE SUCCESS TV</span>
+          <span className="brand-name">ISTV AI MOCK CALLS</span>
+          <span className="brand-sub">SALES REP TRAINING</span>
         </div>
       </div>
 
