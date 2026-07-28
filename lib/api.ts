@@ -20,6 +20,19 @@ export async function get<T>(path: string): Promise<T> {
   return body.data;
 }
 
+export async function post<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path.replace(/^\/api/, '')}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const parsed: ApiResponse<T> = await res.json();
+  if (!res.ok || !parsed.success || parsed.data === null) {
+    throw new Error(parsed.error ?? `Request failed: ${path}`);
+  }
+  return parsed.data;
+}
+
 export interface CallType {
   slug: string;
   label: string;
@@ -77,12 +90,5 @@ export async function startSession(body: {
   persona_slug: string;
   difficulty: string;
 }): Promise<StartSessionResult> {
-  const res = await fetch(`${BASE}/sessions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const parsed: ApiResponse<StartSessionResult> = await res.json();
-  if (!res.ok || !parsed.success || !parsed.data) throw new Error(parsed.error ?? 'startSession failed');
-  return parsed.data;
+  return post<StartSessionResult>('/api/sessions', body);
 }

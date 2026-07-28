@@ -14,6 +14,7 @@ import {
   type RepSummary,
 } from '../lib/api';
 import { HistoryList } from '../components/HistoryList';
+import { PostCallFeedbackModal } from '../components/PostCallFeedbackModal';
 import { SessionDetail } from '../components/SessionDetail';
 import { RoleplaySetup } from '../components/RoleplaySetup';
 import { mapApiPersona, type RoleplayConfig } from '../lib/roleplay';
@@ -261,11 +262,18 @@ function HomeInner() {
   const router = useRouter();
   const params = useSearchParams();
   const tabParam = params.get('tab');
+  const sessionParam = params.get('session');
+  const feedbackParam = params.get('feedback');
   const [activeTab, setActiveTab] = useState<Tab>(
     tabParam === 'analytics' ? 'Analytics' : tabParam === 'history' ? 'Roleplay History' : 'home'
   );
   // Which session's detail is open in the History tab (null = show the list).
-  const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
+  const [historyOpenId, setHistoryOpenId] = useState<string | null>(
+    tabParam === 'history' ? sessionParam : null
+  );
+  const [showFeedbackModal, setShowFeedbackModal] = useState(
+    tabParam === 'history' && feedbackParam === '1' && Boolean(sessionParam)
+  );
 
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [reps, setReps] = useState<RepSummary[]>([]);
@@ -346,11 +354,27 @@ function HomeInner() {
     router.push(`/roleplay?${query.toString()}`);
   };
 
+  const clearHistorySessionParam = () => {
+    if (params.get('session')) router.replace('/?tab=history');
+  };
+
+  const closeFeedbackModal = (sessionId: string | null = historyOpenId) => {
+    setShowFeedbackModal(false);
+    setActiveTab('Roleplay History');
+    setHistoryOpenId(sessionId);
+    if (sessionId) {
+      router.replace(`/?tab=history&session=${encodeURIComponent(sessionId)}`);
+      return;
+    }
+    router.replace('/?tab=history');
+  };
+
   return (
     <div className="app">
       <Sidebar
         active={activeTab}
         onChange={t => {
+          if (t !== 'Roleplay History') setShowFeedbackModal(false);
           if (t === 'Roleplay History') setHistoryOpenId(null); // nav click → list, not a stale detail
           setActiveTab(t);
         }}
@@ -363,22 +387,50 @@ function HomeInner() {
             <AnalyticsView reps={reps} />
           </div>
         )}
-        {activeTab === 'Roleplay History' &&
-          (historyOpenId ? (
-            // SessionDetail owns its own full-height layout + internal scroll.
-            <SessionDetail
-              id={historyOpenId}
-              onBack={() => setHistoryOpenId(null)}
-              onRetry={() => {
-                setHistoryOpenId(null);
-                setActiveTab('home');
+        {activeTab === 'Roleplay History' && (
+          <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
+            <div
+              aria-hidden={showFeedbackModal}
+              style={{
+                height: '100%',
+                filter: showFeedbackModal ? 'blur(5px)' : 'none',
+                opacity: showFeedbackModal ? 0.72 : 1,
+                transform: showFeedbackModal ? 'scale(0.994)' : 'none',
+                transition: 'filter 160ms ease, opacity 160ms ease, transform 160ms ease',
+                pointerEvents: showFeedbackModal ? 'none' : 'auto',
               }}
-            />
-          ) : (
-            <div className="scroll-y" style={{ overflowY: 'auto', height: '100%' }}>
-              <HistoryList onOpen={setHistoryOpenId} onStart={() => setActiveTab('home')} />
+            >
+              {historyOpenId ? (
+                // SessionDetail owns its own full-height layout + internal scroll.
+                <SessionDetail
+                  id={historyOpenId}
+                  onBack={() => {
+                    closeFeedbackModal();
+                    clearHistorySessionParam();
+                    setHistoryOpenId(null);
+                  }}
+                  onRetry={() => {
+                    closeFeedbackModal();
+                    if (params.get('session')) router.replace('/');
+                    setHistoryOpenId(null);
+                    setActiveTab('home');
+                  }}
+                />
+              ) : (
+                <div className="scroll-y" style={{ overflowY: 'auto', height: '100%' }}>
+                  <HistoryList onOpen={setHistoryOpenId} onStart={() => setActiveTab('home')} />
+                </div>
+              )}
             </div>
-          ))}
+            {showFeedbackModal && historyOpenId && (
+              <PostCallFeedbackModal
+                sessionId={historyOpenId}
+                onCancel={() => closeFeedbackModal(historyOpenId)}
+                onSaved={() => closeFeedbackModal(historyOpenId)}
+              />
+            )}
+          </div>
+        )}
         {activeTab === 'FAQ' && (
           <div className="scroll-y" style={{ overflowY: 'auto', height: '100%' }}>
             <FaqView />

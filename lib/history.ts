@@ -2,7 +2,7 @@
 // Wired to the real backend: getSessions/getSession hit /api/sessions, which
 // returns these exact shapes (see api/history_view.py).
 
-import { get } from './api';
+import { get, post } from './api';
 
 export interface TranscriptMessage {
   speaker: 'rep' | 'ai';
@@ -15,6 +15,13 @@ export interface ScorecardItem {
   name: string;
   earned: number;
   total: number;
+}
+
+export interface SessionFeedback {
+  struggles: string[];
+  behaviorIssues: string[];
+  notes: string;
+  submittedAt: string;
 }
 
 // The UI state machine, in order:
@@ -45,6 +52,7 @@ export interface SessionDetail extends SessionSummary {
   toImprove: string[];
   scorecard: ScorecardItem[];
   transcript: TranscriptMessage[];
+  feedback?: SessionFeedback | null;
 }
 
 export function initialsOf(name: string): string {
@@ -70,6 +78,7 @@ export interface PendingSession {
   callType?: string;
   difficulty?: string;
   duration?: string;
+  feedback?: SessionFeedback | null;
 }
 
 export function getSessions(repSlug?: string): Promise<SessionSummary[]> {
@@ -94,6 +103,13 @@ export function getRoster(): Promise<RosterEntry[]> {
 
 export function getSession(id: string): Promise<SessionDetail | PendingSession> {
   return get<SessionDetail | PendingSession>(`/api/sessions/${id}`);
+}
+
+export function submitSessionFeedback(
+  id: string,
+  body: { struggles: string[]; behavior_issues: string[]; notes: string },
+): Promise<SessionFeedback> {
+  return post<SessionFeedback>(`/api/sessions/${id}/feedback`, body);
 }
 
 // A pending/failed session has no scorecard; a full detail always does.

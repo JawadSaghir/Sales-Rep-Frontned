@@ -2,10 +2,218 @@
 // components/SessionDetail.tsx — session detail: transcript + coaching rail (design 1b).
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../lib/icons';
-import { getSession, initialsOf, isPending, type PendingSession, type SessionDetail as Detail } from '../lib/history';
+import {
+  getSession,
+  initialsOf,
+  isPending,
+  submitSessionFeedback,
+  type PendingSession,
+  type SessionDetail as Detail,
+  type SessionFeedback,
+} from '../lib/history';
+
+const STRUGGLE_OPTIONS = [
+  { value: 'opening', label: 'Opening' },
+  { value: 'discovery', label: 'Discovery' },
+  { value: 'objection_handling', label: 'Objection handling' },
+  { value: 'closing', label: 'Closing' },
+  { value: 'confidence', label: 'Confidence' },
+  { value: 'staying_on_script', label: 'Staying on script' },
+] as const;
+
+const BEHAVIOR_OPTIONS = [
+  { value: 'felt_unrealistic', label: 'Felt unrealistic' },
+  { value: 'talked_over_me', label: 'Talked over me' },
+  { value: 'response_delay', label: 'Slow to respond' },
+  { value: 'misheard_me', label: 'Misheard me' },
+  { value: 'repetitive', label: 'Too repetitive' },
+  { value: 'wrong_difficulty', label: 'Difficulty felt off' },
+  { value: 'wrong_context', label: 'Wrong persona/context' },
+  { value: 'tone_felt_off', label: 'Tone felt off' },
+] as const;
+
+type FeedbackMode = 'hidden' | 'editable' | 'readonly';
 
 function fmt(sec: number): string {
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+}
+
+function toggleChoice(current: string[], value: string): string[] {
+  return current.includes(value) ? current.filter(item => item !== value) : [...current, value];
+}
+
+function selectedLabels(
+  options: readonly { value: string; label: string }[],
+  values: string[],
+): string[] {
+  return values
+    .map(value => options.find(option => option.value === value)?.label ?? value)
+    .filter(Boolean);
+}
+
+function FeedbackCard({
+  mode,
+  struggles,
+  behaviorIssues,
+  notes,
+  submittedAt,
+  submitting,
+  submitError,
+  onToggleStruggle,
+  onToggleBehavior,
+  onNotesChange,
+  onSubmit,
+}: {
+  mode: FeedbackMode;
+  struggles: string[];
+  behaviorIssues: string[];
+  notes: string;
+  submittedAt: string | null;
+  submitting: boolean;
+  submitError: string | null;
+  onToggleStruggle: (value: string) => void;
+  onToggleBehavior: (value: string) => void;
+  onNotesChange: (value: string) => void;
+  onSubmit: () => void;
+}) {
+  if (mode === 'hidden') return null;
+  const chipStyle = (active: boolean): React.CSSProperties => ({
+    padding: '7px 10px',
+    borderRadius: 999,
+    border: `1px solid ${active ? 'var(--brand-line)' : 'var(--line)'}`,
+    background: active ? 'var(--brand-soft)' : 'var(--surface)',
+    color: active ? 'var(--brand-ink)' : 'var(--ink-soft)',
+    fontSize: 11.5,
+    fontWeight: 700,
+    cursor: 'pointer',
+  });
+  const submitted = Boolean(submittedAt);
+  const readonlyStruggles = selectedLabels(STRUGGLE_OPTIONS, struggles);
+  const readonlyBehaviorIssues = selectedLabels(BEHAVIOR_OPTIONS, behaviorIssues);
+
+  if (mode === 'readonly') {
+    return (
+      <div className="panel" style={{ padding: '18px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <Icon name="target" size={16} style={{ color: 'var(--brand)' }} />
+          <span style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--ink)' }}>Rep feedback</span>
+        </div>
+        {!submitted && readonlyStruggles.length === 0 && readonlyBehaviorIssues.length === 0 && !notes.trim() ? (
+          <div style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--ink-mute)' }}>
+            No rep feedback was submitted for this call.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.8px', color: 'var(--ink-mute)', marginBottom: 8 }}>WHAT FELT HARD</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {readonlyStruggles.length > 0 ? readonlyStruggles.map(label => (
+                  <span key={label} className="pill-neutral">{label}</span>
+                )) : <span style={{ fontSize: 12, color: 'var(--ink-mute)' }}>Nothing selected.</span>}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.8px', color: 'var(--ink-mute)', marginBottom: 8 }}>AI BEHAVIOR ISSUES</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {readonlyBehaviorIssues.length > 0 ? readonlyBehaviorIssues.map(label => (
+                  <span key={label} className="pill-neutral">{label}</span>
+                )) : <span style={{ fontSize: 12, color: 'var(--ink-mute)' }}>Nothing selected.</span>}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.8px', color: 'var(--ink-mute)', marginBottom: 8 }}>NOTES</div>
+              <div style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--ink-soft)' }}>
+                {notes.trim() || 'No notes left.'}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel" style={{ padding: '18px 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <Icon name="target" size={16} style={{ color: 'var(--brand)' }} />
+        <span style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--ink)' }}>Your feedback</span>
+      </div>
+      <div style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--ink-mute)', marginBottom: 14 }}>
+        Optional. Capture what felt hard and whether the buyer behavior felt unrealistic while the call is still fresh.
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.8px', color: 'var(--ink-mute)', marginBottom: 8 }}>WHAT DID YOU STRUGGLE WITH?</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {STRUGGLE_OPTIONS.map(option => (
+              <button
+                key={option.value}
+                type="button"
+                style={chipStyle(struggles.includes(option.value))}
+                onClick={() => onToggleStruggle(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.8px', color: 'var(--ink-mute)', marginBottom: 8 }}>DID THE AI FEEL OFF IN ANY WAY?</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {BEHAVIOR_OPTIONS.map(option => (
+              <button
+                key={option.value}
+                type="button"
+                style={chipStyle(behaviorIssues.includes(option.value))}
+                onClick={() => onToggleBehavior(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.8px', color: 'var(--ink-mute)', marginBottom: 8 }}>OPTIONAL NOTE</div>
+          <textarea
+            value={notes}
+            onChange={event => onNotesChange(event.target.value)}
+            placeholder="Anything the AI missed, repeated, or handled unrealistically?"
+            style={{
+              width: '100%',
+              minHeight: 96,
+              resize: 'vertical',
+              borderRadius: 14,
+              border: '1px solid var(--line)',
+              background: 'var(--surface)',
+              padding: '12px 13px',
+              fontSize: 12.5,
+              lineHeight: 1.55,
+              color: 'var(--ink)',
+              outline: 'none',
+            }}
+          />
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 12, color: submitError ? 'var(--brand-ink)' : submitted ? 'var(--teal)' : 'var(--ink-mute)' }}>
+          {submitError
+            ? submitError
+            : submitted
+            ? 'Feedback saved for this session.'
+            : 'No fields are required.'}
+        </div>
+        <button
+          type="button"
+          className="btn btn-primary"
+          style={{ padding: '9px 14px', fontSize: 12.5 }}
+          onClick={onSubmit}
+          disabled={submitting}
+        >
+          {submitting ? 'Saving…' : submitted ? 'Update feedback' : 'Save feedback'}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function Sparkline({ points }: { points: number[] }) {
@@ -26,12 +234,38 @@ function Sparkline({ points }: { points: number[] }) {
   );
 }
 
-export function SessionDetail({ id, onBack, onRetry }: { id: string; onBack: () => void; onRetry: () => void }) {
+export function SessionDetail({
+  id,
+  onBack,
+  onRetry,
+  feedbackMode = 'hidden',
+}: {
+  id: string;
+  onBack: () => void;
+  onRetry: () => void;
+  feedbackMode?: FeedbackMode;
+}) {
   const [detail, setDetail] = useState<Detail | PendingSession | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [sec, setSec] = useState(0);
+  const [struggles, setStruggles] = useState<string[]>([]);
+  const [behaviorIssues, setBehaviorIssues] = useState<string[]>([]);
+  const [notes, setNotes] = useState('');
+  const [submittedAt, setSubmittedAt] = useState<string | null>(null);
+  const [feedbackLoadedFor, setFeedbackLoadedFor] = useState<string | null>(null);
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval>>();
+
+  const applyFeedback = (feedback?: SessionFeedback | null) => {
+    if (!feedback) return;
+    setStruggles(feedback.struggles);
+    setBehaviorIssues(feedback.behaviorIssues);
+    setNotes(feedback.notes);
+    setSubmittedAt(feedback.submittedAt);
+    setFeedbackLoadedFor(id);
+  };
 
   // Poll while the eval is still running so the scorecard fills in on its own.
   useEffect(() => {
@@ -58,9 +292,21 @@ export function SessionDetail({ id, onBack, onRetry }: { id: string; onBack: () 
     // Opening a different session must not inherit the previous one's clock.
     setPlaying(false);
     setSec(0);
+    setStruggles([]);
+    setBehaviorIssues([]);
+    setNotes('');
+    setSubmittedAt(null);
+    setFeedbackLoadedFor(null);
+    setSubmittingFeedback(false);
+    setFeedbackError(null);
     load();
     return () => { alive = false; stop(); };
   }, [id]);
+
+  useEffect(() => {
+    if (!detail?.feedback || feedbackLoadedFor === id) return;
+    applyFeedback(detail.feedback);
+  }, [detail, feedbackLoadedFor, id]);
 
   // Transcript playback clock. Only runs while actually playing on a session
   // that has a real duration — `% 0` would yield NaN on a 0:00 (no-transcript) call.
@@ -70,6 +316,24 @@ export function SessionDetail({ id, onBack, onRetry }: { id: string; onBack: () 
     timer.current = setInterval(() => setSec(s => (s + 1) % dur), 1000);
     return () => clearInterval(timer.current);
   }, [playing, detail]);
+
+  const saveFeedback = async () => {
+    setSubmittingFeedback(true);
+    setFeedbackError(null);
+    try {
+      const saved = await submitSessionFeedback(id, {
+        struggles,
+        behavior_issues: behaviorIssues,
+        notes,
+      });
+      applyFeedback(saved);
+      setDetail(current => (current ? { ...current, feedback: saved } : current));
+    } catch (e: unknown) {
+      setFeedbackError(e instanceof Error ? e.message : 'Could not save your feedback.');
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
 
   if (!detail) {
     return (
@@ -128,37 +392,56 @@ export function SessionDetail({ id, onBack, onRetry }: { id: string; onBack: () 
               : 'Read your transcript below — coaching notes appear here automatically when ready.'}
           </div>
         </div>
-        {pendingTranscript.length === 0 ? (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
-            <div style={{ fontSize: 12.5, color: 'var(--ink-mute)', maxWidth: 360, textAlign: 'center', lineHeight: 1.6 }}>
-              {failed
-                ? 'You can start a new roleplay and try again.'
-                : 'This updates automatically in a few seconds.'}
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          {feedbackMode !== 'hidden' && (
+            <div style={{ padding: '16px 20px 0' }}>
+              <FeedbackCard
+                mode={feedbackMode}
+                struggles={struggles}
+                behaviorIssues={behaviorIssues}
+                notes={notes}
+                submittedAt={submittedAt}
+                submitting={submittingFeedback}
+                submitError={feedbackError}
+                onToggleStruggle={value => setStruggles(current => toggleChoice(current, value))}
+                onToggleBehavior={value => setBehaviorIssues(current => toggleChoice(current, value))}
+                onNotesChange={setNotes}
+                onSubmit={saveFeedback}
+              />
             </div>
-          </div>
-        ) : (
-          <div className="scroll-y" style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {pendingTranscript.map((m, i) => {
-              const isRep = m.speaker === 'rep';
-              return (
-                <div key={i} style={{ display: 'flex', gap: 11, flexDirection: isRep ? 'row-reverse' : 'row' }}>
-                  <span style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 700, background: isRep ? 'var(--ink)' : 'var(--surface-3)', color: isRep ? '#fff' : 'var(--ink-soft)' }}>
-                    {isRep ? 'You' : initialsOf(personaName)}
-                  </span>
-                  <div style={{ maxWidth: '76%', display: 'flex', flexDirection: 'column', gap: 4, alignItems: isRep ? 'flex-end' : 'flex-start' }}>
-                    <div style={{ display: 'flex', gap: 7, alignItems: 'baseline' }}>
-                      <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink)' }}>{isRep ? 'You' : personaName}</span>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink-faint)', fontFamily: 'var(--font-mono)' }}>{m.time}</span>
-                    </div>
-                    <div style={{ padding: '10px 13px', borderRadius: 12, fontSize: 12.5, lineHeight: 1.55, background: isRep ? 'var(--brand-soft)' : 'var(--surface-inset)', color: 'var(--ink)', border: `1px solid ${isRep ? 'var(--brand-line)' : 'var(--line)'}` }}>
-                      {m.text}
+          )}
+          {pendingTranscript.length === 0 ? (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: '18px 20px' }}>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-mute)', maxWidth: 360, textAlign: 'center', lineHeight: 1.6 }}>
+                {failed
+                  ? 'You can start a new roleplay and try again.'
+                  : 'This updates automatically in a few seconds.'}
+              </div>
+            </div>
+          ) : (
+            <div className="scroll-y" style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {pendingTranscript.map((m, i) => {
+                const isRep = m.speaker === 'rep';
+                return (
+                  <div key={i} style={{ display: 'flex', gap: 11, flexDirection: isRep ? 'row-reverse' : 'row' }}>
+                    <span style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 700, background: isRep ? 'var(--ink)' : 'var(--surface-3)', color: isRep ? '#fff' : 'var(--ink-soft)' }}>
+                      {isRep ? 'You' : initialsOf(personaName)}
+                    </span>
+                    <div style={{ maxWidth: '76%', display: 'flex', flexDirection: 'column', gap: 4, alignItems: isRep ? 'flex-end' : 'flex-start' }}>
+                      <div style={{ display: 'flex', gap: 7, alignItems: 'baseline' }}>
+                        <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink)' }}>{isRep ? 'You' : personaName}</span>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink-faint)', fontFamily: 'var(--font-mono)' }}>{m.time}</span>
+                      </div>
+                      <div style={{ padding: '10px 13px', borderRadius: 12, fontSize: 12.5, lineHeight: 1.55, background: isRep ? 'var(--brand-soft)' : 'var(--surface-inset)', color: 'var(--ink)', border: `1px solid ${isRep ? 'var(--brand-line)' : 'var(--line)'}` }}>
+                        {m.text}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -292,6 +575,22 @@ export function SessionDetail({ id, onBack, onRetry }: { id: string; onBack: () 
             </div>
 
             {/* AI feedback */}
+            {feedbackMode !== 'hidden' && (
+              <FeedbackCard
+                mode={feedbackMode}
+                struggles={struggles}
+                behaviorIssues={behaviorIssues}
+                notes={notes}
+                submittedAt={submittedAt}
+                submitting={submittingFeedback}
+                submitError={feedbackError}
+                onToggleStruggle={value => setStruggles(current => toggleChoice(current, value))}
+                onToggleBehavior={value => setBehaviorIssues(current => toggleChoice(current, value))}
+                onNotesChange={setNotes}
+                onSubmit={saveFeedback}
+              />
+            )}
+
             <div className="panel" style={{ padding: '18px 20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <Icon name="sparkle" size={16} style={{ color: 'var(--brand)' }} />

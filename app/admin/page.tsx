@@ -44,6 +44,7 @@ export default function AdminPage() {
         id={sessionId}
         onBack={() => setSessionId(null)}
         onRetry={() => setSessionId(null)}
+        feedbackMode="readonly"
       />
     );
   }

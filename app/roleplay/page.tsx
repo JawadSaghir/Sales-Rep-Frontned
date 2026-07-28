@@ -370,7 +370,7 @@ function RoleplayInner() {
         repLabel={repLabel}
         callTypeLabel={callTypeLabel}
         personaLabel={personaLabel}
-        onLeave={() => router.push('/?tab=history')}
+        onLeave={() => router.push(`/?tab=history&session=${encodeURIComponent(session.session_id)}&feedback=1`)}
       />
     </LiveKitRoom>
   );
