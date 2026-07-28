@@ -30,7 +30,14 @@ export function RoleplaySetup({
 }) {
   const [personas, setPersonas] = useState<Persona[]>(initial);
   const [callTypeIdx, setCallTypeIdx] = useState(0);
-  const [personaIdx, setPersonaIdx] = useState(0);
+  // Selection is held by id, not index. `visible` is recomputed every time the
+  // call-stage tab changes (custom personas drop in/out), so a numeric index
+  // silently pointed at whatever else now occupied that slot — the rep could
+  // switch stages and start a roleplay against a buyer they never picked. An
+  // id survives any reordering/filtering of `visible`/`filtered`; see the
+  // `persona` derivation below for the one deliberate fallback (selection
+  // genuinely no longer exists under this stage -> default to the first card).
+  const [personaId, setPersonaId] = useState<string | null>(null);
   const [diffIdx, setDiffIdx] = useState(1);
   const [query, setQuery] = useState('');
 
@@ -57,12 +64,19 @@ export function RoleplaySetup({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return visible
-      .map((p, i) => ({ p, i }))
-      .filter(({ p }) => !q || p.name.toLowerCase().includes(q) || p.business.toLowerCase().includes(q));
+    return visible.filter(p => !q || p.name.toLowerCase().includes(q) || p.business.toLowerCase().includes(q));
   }, [visible, query]);
 
-  const persona = visible[Math.min(personaIdx, visible.length - 1)];
+  // Re-locate the selected persona by id inside the current `visible` set.
+  // Falls back to the first visible card only when the selection has
+  // genuinely dropped out (e.g. it was scoped to a stage the rep just
+  // switched away from) — never a silent slide to whatever now sits at a
+  // stale numeric index. Card highlight, the summary rail, and Start all read
+  // this same `persona`, so they can never disagree about who is selected.
+  const persona = useMemo(
+    () => visible.find(p => p.id === personaId) ?? visible[0],
+    [visible, personaId],
+  );
   const difficulty = DIFFICULTIES[diffIdx];
 
   const start = () =>
@@ -97,7 +111,13 @@ export function RoleplaySetup({
     }
     try {
       const created = await createPersona(draft);
-      setPersonas(prev => [...prev, mapApiPersona(created)]);
+      const mapped = mapApiPersona(created);
+      setPersonas(prev => [...prev, mapped]);
+      // Safe to select-after-save now that selection is id-based: even if this
+      // stage differs from the one currently active in Step 1 (so the new
+      // card isn't in `visible` yet), the id is what gets re-located the
+      // moment the rep switches to its stage — never a stale index collision.
+      setPersonaId(mapped.id);
       setFormOpen(false);
     } catch (e) {
       setFormError(e instanceof Error ? e.message : 'Could not save this persona.');
@@ -168,13 +188,13 @@ export function RoleplaySetup({
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 24 }}>
-          {filtered.map(({ p, i }) => {
-            const active = personaIdx === i;
+          {filtered.map(p => {
+            const active = persona.id === p.id;
             return (
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setPersonaIdx(i)}
+                onClick={() => setPersonaId(p.id)}
                 className="persona-card"
                 style={{
                   position: 'relative',
