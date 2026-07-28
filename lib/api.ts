@@ -33,6 +33,18 @@ export async function post<T>(path: string, body: unknown): Promise<T> {
   return parsed.data;
 }
 
+export async function del<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}${path.replace(/^\/api/, '')}`, {
+    method: 'DELETE',
+    cache: 'no-store',
+  });
+  const body: ApiResponse<T> = await res.json();
+  if (!res.ok || !body.success || body.data === null) {
+    throw new Error(body.error ?? `Request failed: ${path}`);
+  }
+  return body.data;
+}
+
 export interface CallType {
   slug: string;
   label: string;
@@ -47,6 +59,14 @@ export interface Persona {
   industry: string;
   primary_objection: string;
   scenario: string;
+  custom?: boolean;
+  call_type?: string | null;
+}
+
+export interface PersonaOptions {
+  industries: string[];
+  objections: { id: string; trigger: string }[];
+  stage_defaults: Record<string, string[]>;
 }
 
 export interface Difficulty {
@@ -76,6 +96,18 @@ export interface Me {
 
 export const getCallTypes = () => get<CallType[]>('/api/call-types');
 export const getPersonas = () => get<Persona[]>('/api/personas');
+export const getPersonaOptions = () => get<PersonaOptions>('/api/persona-options');
+export const createPersona = (draft: {
+  name: string;
+  business: string;
+  industry: string;
+  objection: string;
+  scenario: string;
+  call_type: string;
+  objection_ids: string[];
+}) => post<Persona>('/api/personas', draft);
+export const deletePersona = (slug: string) =>
+  del<{ deleted: boolean }>(`/api/personas/${encodeURIComponent(slug)}`);
 export const getDifficulties = () => get<Difficulty[]>('/api/difficulties');
 export const getReps = () => get<RepSummary[]>('/api/reps');
 export const getRepProfile = (slug: string) => get<Record<string, unknown>>(`/api/reps/${slug}`);

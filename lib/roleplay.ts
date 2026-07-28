@@ -17,7 +17,8 @@ export interface Persona {
   industry: string;
   objection: string;   // signature objection, shown on the card
   scenario: string;    // briefing shown in the summary rail
-  custom?: boolean;     // user-created persona
+  custom?: boolean;    // user-created persona
+  callType?: string | null;  // custom personas cover exactly one stage
 }
 
 export interface CallType {
@@ -44,6 +45,8 @@ export interface PersonaDraft {
   industry: string;
   objection: string;
   scenario: string;
+  call_type: string;
+  objection_ids: string[];
 }
 
 export function initialsOf(name: string): string {
@@ -90,6 +93,8 @@ export function mapApiPersona(p: ApiPersona): Persona {
     industry: p.industry,
     objection: p.primary_objection,
     scenario: p.scenario,
+    custom: Boolean(p.custom),
+    callType: p.call_type ?? null,
   };
 }
 
@@ -101,17 +106,3 @@ export const MOCK_PERSONAS: Persona[] = [
   { id: 'raj', name: 'Raj Patel', business: 'Patel & Co Accounting', industry: 'Finance', objection: '"Your price is way too high."', scenario: 'Raj compares everything to spreadsheet cost. He’ll anchor hard on price — quantify the pain before you ever say a number.' },
   { id: 'elena', name: 'Elena Marsh', business: 'Marsh Realty', industry: 'Real Estate', objection: '"I need to talk to my partner first."', scenario: 'Elena is friendly but never decides alone. Practice isolating the objection and booking the three-way follow-up on the call.' },
 ];
-
-// Turns a validated form draft into a Persona (client-side id). Swap for a real
-// POST when a persona-create endpoint exists and return the server record.
-export function draftToPersona(d: PersonaDraft): Persona {
-  return {
-    id: 'custom-' + Date.now().toString(36),
-    name: d.name.trim(),
-    business: d.business.trim() || 'Custom company',
-    industry: d.industry.trim() || 'Custom',
-    objection: d.objection.trim() || '"—"',
-    scenario: d.scenario.trim(),
-    custom: true,
-  };
-}

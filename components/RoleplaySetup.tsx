@@ -2,10 +2,11 @@
 // components/RoleplaySetup.tsx — AI Sales Roleplays setup (design 2a).
 // Three numbered steps (call type → persona → difficulty) + live dark summary rail,
 // with an "Add custom persona" card that opens a modal form.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '../lib/icons';
+import { createPersona, deletePersona, getPersonaOptions, type PersonaOptions } from '../lib/api';
 import {
-  CALL_TYPES, DIFFICULTIES, MOCK_PERSONAS, draftToPersona, initialsOf,
+  CALL_TYPES, DIFFICULTIES, MOCK_PERSONAS, initialsOf, mapApiPersona,
   type Persona, type PersonaDraft, type RoleplayConfig,
 } from '../lib/roleplay';
 
@@ -13,7 +14,10 @@ import {
 // asset in /public (e.g. /roleplay-hero.png).
 const RAIL_BG = '/roleplay-hero.png';
 
-const EMPTY_DRAFT: PersonaDraft = { name: '', business: '', industry: '', objection: '', scenario: '' };
+const EMPTY_DRAFT: PersonaDraft = {
+  name: '', business: '', industry: '', objection: '',
+  scenario: '', call_type: 'call_1', objection_ids: [],
+};
 
 export function RoleplaySetup({
   personas: initial = MOCK_PERSONAS,
@@ -34,35 +38,80 @@ export function RoleplaySetup({
   const [draft, setDraft] = useState<PersonaDraft>(EMPTY_DRAFT);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return personas
-      .map((p, i) => ({ p, i }))
-      .filter(({ p }) => !q || p.name.toLowerCase().includes(q) || p.business.toLowerCase().includes(q));
-  }, [personas, query]);
+  const [options, setOptions] = useState<PersonaOptions | null>(null);
+  const [otherIndustry, setOtherIndustry] = useState(false);
+  const [touchedObjections, setTouchedObjections] = useState(false);
+
+  useEffect(() => {
+    getPersonaOptions().then(setOptions).catch(() => setOptions(null));
+  }, []);
 
   const callType = CALL_TYPES[callTypeIdx];
-  const persona = personas[Math.min(personaIdx, personas.length - 1)];
+
+  // A custom persona covers one stage. Hiding the mismatches here is what stops
+  // the rep hitting a 400 at Start instead of at selection time.
+  const visible = useMemo(
+    () => personas.filter(p => !p.custom || !p.callType || p.callType === callType.id),
+    [personas, callType.id],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return visible
+      .map((p, i) => ({ p, i }))
+      .filter(({ p }) => !q || p.name.toLowerCase().includes(q) || p.business.toLowerCase().includes(q));
+  }, [visible, query]);
+
+  const persona = visible[Math.min(personaIdx, visible.length - 1)];
   const difficulty = DIFFICULTIES[diffIdx];
 
   const start = () =>
     onStart?.({ callTypeId: callType.id, personaId: persona.id, difficulty: difficulty.level });
 
-  const openForm = () => { setDraft(EMPTY_DRAFT); setFormError(null); setFormOpen(true); };
+  const openForm = () => {
+    setDraft(EMPTY_DRAFT);
+    setOtherIndustry(false);
+    setTouchedObjections(false);
+    setFormError(null);
+    setFormOpen(true);
+  };
   const setField = (k: keyof PersonaDraft) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setDraft(d => ({ ...d, [k]: e.target.value }));
     setFormError(null);
   };
-  const saveForm = () => {
+
+  // Re-seed objections when the stage changes, unless the rep already edited them.
+  useEffect(() => {
+    if (touchedObjections || !options) return;
+    setDraft(d => ({ ...d, objection_ids: options.stage_defaults[d.call_type] ?? [] }));
+  }, [draft.call_type, options, touchedObjections]);
+
+  const saveForm = async () => {
     if (!draft.name.trim() || !draft.scenario.trim()) {
       setFormError('Name and scenario briefing are required.');
       return;
     }
-    const created = draftToPersona(draft);
-    setPersonas(prev => [...prev, created]);
-    setPersonaIdx(personas.length); // select the new one
-    onCreatePersona?.(draft);
-    setFormOpen(false);
+    if (draft.objection_ids.length === 0) {
+      setFormError('Pick at least one objection.');
+      return;
+    }
+    try {
+      const created = await createPersona(draft);
+      setPersonas(prev => [...prev, mapApiPersona(created)]);
+      setFormOpen(false);
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : 'Could not save this persona.');
+    }
+  };
+
+  const removePersona = async (p: Persona) => {
+    if (!confirm(`Remove ${p.name}? Past calls keep their scorecards.`)) return;
+    try {
+      await deletePersona(p.id);
+      setPersonas(prev => prev.filter(x => x.id !== p.id));
+    } catch {
+      setFormError('Could not remove this persona.');
+    }
   };
 
   return (
@@ -128,10 +177,31 @@ export function RoleplaySetup({
                 onClick={() => setPersonaIdx(i)}
                 className="persona-card"
                 style={{
+                  position: 'relative',
                   border: `1.5px solid ${active ? 'var(--brand)' : 'var(--line)'}`,
                   background: active ? 'var(--brand-tint)' : 'var(--surface)',
                 }}
               >
+                {p.custom && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Remove ${p.name}`}
+                    onClick={e => { e.stopPropagation(); removePersona(p); }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault(); e.stopPropagation(); removePersona(p);
+                      }
+                    }}
+                    style={{
+                      position: 'absolute', top: 6, right: 6, width: 20, height: 20,
+                      borderRadius: '50%', display: 'grid', placeItems: 'center',
+                      color: 'var(--ink-faint)', cursor: 'pointer',
+                    }}
+                  >
+                    <Icon name="x" size={12} strokeWidth={2.5} />
+                  </span>
+                )}
                 <span style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
                   <span className="avatar" style={{ width: 34, height: 34 }}>{initialsOf(p.name)}</span>
                   <span style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
@@ -259,9 +329,49 @@ export function RoleplaySetup({
             <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <Field label="Name" value={draft.name} onChange={setField('name')} placeholder="e.g. Priya Shah" />
-                <Field label="Industry" value={draft.industry} onChange={setField('industry')} placeholder="e.g. SaaS" />
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {/* call stage — a custom persona covers exactly one */}
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink)' }}>Call stage</span>
+                  <select
+                    id="cp-stage"
+                    value={draft.call_type}
+                    onChange={e => setDraft(d => ({ ...d, call_type: e.target.value }))}
+                    style={{ boxSizing: 'border-box', padding: '9px 11px', borderRadius: 8, border: '1px solid var(--line-strong)', fontSize: 12.5, fontFamily: 'inherit', color: 'var(--ink)', outline: 'none' }}
+                  >
+                    {CALL_TYPES.filter(c => !c.locked).map(c => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
               <Field label="Business / company" value={draft.business} onChange={setField('business')} placeholder="e.g. Northwind Software" />
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {/* industry — corpus taxonomy, with a free-text escape */}
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink)' }}>Industry</span>
+                <select
+                  id="cp-industry"
+                  value={otherIndustry ? '__other__' : draft.industry}
+                  onChange={e => {
+                    const v = e.target.value;
+                    if (v === '__other__') { setOtherIndustry(true); setDraft(d => ({ ...d, industry: '' })); }
+                    else { setOtherIndustry(false); setDraft(d => ({ ...d, industry: v })); }
+                  }}
+                  style={{ boxSizing: 'border-box', padding: '9px 11px', borderRadius: 8, border: '1px solid var(--line-strong)', fontSize: 12.5, fontFamily: 'inherit', color: 'var(--ink)', outline: 'none' }}
+                >
+                  <option value="" disabled>Choose an industry…</option>
+                  {(options?.industries ?? []).map(i => <option key={i} value={i}>{i}</option>)}
+                  <option value="__other__">Other…</option>
+                </select>
+              </label>
+              {otherIndustry && (
+                <input
+                  placeholder="Describe the industry"
+                  value={draft.industry}
+                  onChange={e => setDraft(d => ({ ...d, industry: e.target.value }))}
+                  aria-label="Other industry"
+                  style={{ boxSizing: 'border-box', padding: '9px 11px', borderRadius: 8, border: '1px solid var(--line-strong)', fontSize: 12.5, fontFamily: 'inherit', color: 'var(--ink)', outline: 'none' }}
+                />
+              )}
               <Field label="Signature objection" value={draft.objection} onChange={setField('objection')} placeholder={'e.g. "We just signed with someone else."'} />
               <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink)' }}>Scenario briefing</span>
@@ -271,6 +381,33 @@ export function RoleplaySetup({
                   placeholder="Describe the buyer's mindset, what they care about, and what a win looks like on this call…"
                   style={{ boxSizing: 'border-box', minHeight: 84, resize: 'vertical', padding: '9px 11px', borderRadius: 8, border: '1px solid var(--line-strong)', fontSize: 12.5, lineHeight: 1.5, fontFamily: 'inherit', color: 'var(--ink)', outline: 'none' }}
                 />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {/* objections — real cards, pre-seeded from the stage */}
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink)' }}>Objections this buyer raises</span>
+                <div style={{ display: 'grid', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
+                  {(options?.objections ?? []).map(o => {
+                    const checked = draft.objection_ids.includes(o.id);
+                    return (
+                      <label key={o.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12 }}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            setTouchedObjections(true);
+                            setDraft(d => ({
+                              ...d,
+                              objection_ids: checked
+                                ? d.objection_ids.filter(x => x !== o.id)
+                                : [...d.objection_ids, o.id],
+                            }));
+                          }}
+                        />
+                        <span>{o.trigger || o.id}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </label>
               {formError && <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--brand-ink)' }}>{formError}</div>}
             </div>
