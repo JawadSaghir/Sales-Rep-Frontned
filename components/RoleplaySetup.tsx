@@ -231,10 +231,10 @@ export function RoleplaySetup({
                   <span className="avatar" style={{ width: 34, height: 34 }}>{initialsOf(p.name)}</span>
                   <span style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 700, color: 'var(--ink)' }}>
-                      {p.name} <span className="tag">AI</span>
+                      {p.label} <span className="tag">AI</span>
                     </span>
                     <span style={{ display: 'block', fontSize: 10.5, color: 'var(--ink-mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {p.business} · {p.industry}
+                      {p.label !== p.name ? `${p.name} · ${p.business}` : `${p.business} · ${p.industry}`}
                     </span>
                   </span>
                   <span style={{
@@ -245,6 +245,26 @@ export function RoleplaySetup({
                     {active && <Icon name="check" size={11} strokeWidth={2.5} />}
                   </span>
                 </span>
+                {p.traits.length > 0 && (
+                  <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {p.traits.slice(0, 2).map(trait => (
+                      <span
+                        key={trait}
+                        style={{
+                          padding: '3px 8px',
+                          borderRadius: 999,
+                          border: '1px solid var(--line)',
+                          background: 'var(--surface-2)',
+                          fontSize: 10.5,
+                          fontWeight: 600,
+                          color: 'var(--ink-soft)',
+                        }}
+                      >
+                        {trait}
+                      </span>
+                    ))}
+                  </span>
+                )}
                 <span style={{ fontSize: 11, lineHeight: 1.5, color: 'var(--ink-soft)', background: 'var(--surface-inset)', border: '1px solid var(--surface-3)', borderRadius: 8, padding: '7px 10px', display: 'block', textAlign: 'left' }}>
                   {p.objection}
                 </span>
@@ -320,11 +340,20 @@ export function RoleplaySetup({
             {initialsOf(persona.name)}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 16, fontWeight: 700 }}>
-            {persona.name} <span className="tag">AI</span>
+            {persona.label} <span className="tag">AI</span>
           </div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,.72)', marginTop: 3, marginBottom: 14 }}>
-            {persona.business} · {persona.industry}
+            {persona.label !== persona.name ? `${persona.name} · ${persona.business}` : `${persona.business} · ${persona.industry}`}
           </div>
+          {persona.traits.length > 0 && (
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', justifyContent: 'center', marginTop: -4, marginBottom: 14 }}>
+              {persona.traits.slice(0, 2).map(trait => (
+                <span key={trait} style={{ background: 'rgba(255,255,255,.12)', border: '1px solid rgba(255,255,255,.24)', fontSize: 11, fontWeight: 600, padding: '4px 11px', borderRadius: 'var(--r-pill)' }}>
+                  {trait}
+                </span>
+              ))}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 18 }}>
             {[callType.label, 'English', difficulty.level].map(t => (
               <span key={t} style={{ background: 'rgba(255,255,255,.12)', border: '1px solid rgba(255,255,255,.24)', fontSize: 11, fontWeight: 600, padding: '4px 11px', borderRadius: 'var(--r-pill)' }}>{t}</span>
@@ -335,7 +364,7 @@ export function RoleplaySetup({
             onClick={start}
             style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '12px 18px', border: 'none', borderRadius: 9, background: '#fff', color: 'var(--ink)', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}
           >
-            <Icon name="sparkle" size={15} /> Start Roleplay with {persona.name.split(' ')[0]}
+            <Icon name="sparkle" size={15} /> Start Roleplay
           </button>
         </div>
 
@@ -351,7 +380,7 @@ export function RoleplaySetup({
             <Icon name="analytics" size={13} /> Recommended drill
           </div>
           <div style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--ink-soft)' }}>
-            Your weakest category is <strong style={{ color: 'var(--ink)' }}>pricing objections</strong> (avg 34%). Raj Patel's "price is too high" scenario targets it directly.
+            Your weakest category is <strong style={{ color: 'var(--ink)' }}>pricing objections</strong> (avg 34%). This buyer&apos;s headline objection is surfaced here so you can target it directly.
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import type { IconName } from './icons';
 
-export type Tab = 'home' | 'Roleplay History' | 'Analytics' | 'FAQ';
+export type Tab = 'home' | 'Roleplay History' | 'FAQ';
 
 export interface NavItem {
   icon: IconName;
@@ -11,7 +11,6 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { icon: 'roleplay', label: 'home' }, // rendered with a custom label in the sidebar
   { icon: 'history', label: 'Roleplay History' },
-  { icon: 'analytics', label: 'Analytics' },
   { icon: 'faq', label: 'FAQ', badge: true },
 ];
 
@@ -27,7 +26,7 @@ export const FAQS: { q: string; a: string }[] = [
   },
   {
     q: 'How is my performance scored?',
-    a: 'After each call, the session is analysed for how well you surfaced needs, handled objections, and advanced the deal. Your scores roll up into the Analytics tab so you can see where the whole team is strongest and weakest.',
+    a: 'After each call, the session is analysed for how well you surfaced needs, handled objections, and advanced the deal. The replay review shows your score breakdown, coaching notes, objections, and what to improve next time.',
   },
   {
     q: 'Can I practise a specific objection?',
@@ -35,6 +34,6 @@ export const FAQS: { q: string; a: string }[] = [
   },
   {
     q: 'Is the conversation recorded?',
-    a: 'A live transcript is generated during the call so you can review exactly what was said. Nothing is shared outside your team — it exists to power your own coaching and analytics.',
+    a: 'A live transcript is generated during the call so you can review exactly what was said. Nothing is shared outside your team — it exists to power your own coaching and post-call review.',
   },
 ];

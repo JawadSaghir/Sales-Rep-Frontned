@@ -55,6 +55,8 @@ export interface CallType {
 export interface Persona {
   slug: string;
   character_name: string;
+  persona_label?: string;
+  personality_traits?: string[];
   business_name: string;
   industry: string;
   primary_objection: string;
@@ -122,5 +124,28 @@ export async function startSession(body: {
   persona_slug: string;
   difficulty: string;
 }): Promise<StartSessionResult> {
-  return post<StartSessionResult>('/api/sessions', body);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(`${BASE}/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const parsed: ApiResponse<StartSessionResult> = await res.json();
+    if (!res.ok || !parsed.success || parsed.data === null) {
+      throw new Error(parsed.error ?? 'Failed to start session');
+    }
+    return parsed.data;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error(
+        'Starting the call timed out after 15 seconds. Reload the page and try again.',
+      );
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }

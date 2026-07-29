@@ -5,16 +5,81 @@
 import { get, post } from './api';
 
 export interface TranscriptMessage {
+  turn: number;
   speaker: 'rep' | 'ai';
   time: string; // "0:14"
   text: string;
   marker?: string; // coaching highlight, e.g. "Strong permission-based opener"
 }
 
-export interface ScorecardItem {
+export interface TranscriptCitation {
+  turn?: number;
+  t?: number;
+  time?: string;
+}
+
+export interface ScorecardCriterion {
+  key: string;
+  label: string;
+  passed: boolean;
+  weight: number;
+  why: string;
+  improve: string;
+  sectionKey?: string;
+  sectionLabel?: string;
+  citations: TranscriptCitation[];
+}
+
+export interface ScorecardGroup {
+  key: string;
   name: string;
   earned: number;
   total: number;
+  items: ScorecardCriterion[];
+}
+
+export interface ReviewStageSnapshot {
+  key: string;
+  label: string;
+  status: 'strong' | 'mixed' | 'weak' | 'not-enough-evidence';
+  summary: string;
+}
+
+export interface ReviewMetric {
+  key: string;
+  label: string;
+  value: number | string;
+  summary: string;
+  status: 'strong' | 'mixed' | 'weak' | 'neutral' | 'not-enough-evidence';
+}
+
+export interface ReviewQuestion {
+  turn: number;
+  time: string;
+  text: string;
+}
+
+export interface ReviewObjectionMoment {
+  type?: string;
+  label: string;
+  buyerText: string;
+  repText: string;
+  whatWorked: string;
+  whatWasMissed: string;
+  citation?: TranscriptCitation;
+}
+
+export interface ReviewAnalysis {
+  callSummary: string;
+  stageSnapshots: ReviewStageSnapshot[];
+  metrics: ReviewMetric[];
+  objections: {
+    summary: string;
+    moments: ReviewObjectionMoment[];
+    repQuestions: ReviewQuestion[];
+    missedOpportunities: string[];
+  };
+  analysisLimits: string[];
 }
 
 export interface SessionFeedback {
@@ -50,7 +115,8 @@ export interface SessionDetail extends SessionSummary {
   trend: number[]; // last N session scores, oldest first
   wentWell: string[];
   toImprove: string[];
-  scorecard: ScorecardItem[];
+  scorecard: ScorecardGroup[];
+  reviewAnalysis: ReviewAnalysis;
   transcript: TranscriptMessage[];
   feedback?: SessionFeedback | null;
 }

@@ -8,6 +8,10 @@ import { auth } from '../../../../auth';
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8000';
 const AUDIENCE = 'istv-api';
 
+function displayName(value: unknown): string {
+  return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, 120) : '';
+}
+
 async function mintToken(email: string): Promise<string> {
   const secret = process.env.USER_PROXY_SECRET;
   if (!secret) throw new Error('USER_PROXY_SECRET is not configured');
@@ -38,6 +42,7 @@ async function proxy(req: Request, params: { path: string[] }): Promise<Response
   const session = await auth();
   const email = session?.user?.email;
   if (!email) return fail(401, 'signed out');
+  const repName = displayName(session?.user?.name);
 
   let token: string;
   try {
@@ -58,6 +63,7 @@ async function proxy(req: Request, params: { path: string[] }): Promise<Response
       headers: {
         Authorization: `Bearer ${token}`,
         'content-type': req.headers.get('content-type') ?? 'application/json',
+        ...(repName ? { 'x-rep-name': repName } : {}),
       },
       body: req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.text(),
       cache: 'no-store',

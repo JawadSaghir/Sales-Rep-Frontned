@@ -11,6 +11,14 @@ import {
   type SessionDetail as Detail,
   type SessionFeedback,
 } from '../lib/history';
+import { SessionReviewWorkspace } from './SessionReviewWorkspace';
+
+const MIN_TRANSCRIPT_PANE_WIDTH = 360;
+const MIN_REVIEW_PANE_WIDTH = 500;
+const DEFAULT_REVIEW_PANE_WIDTH = 860;
+const SPLITTER_WIDTH = 12;
+const SPLIT_BREAKPOINT =
+  MIN_TRANSCRIPT_PANE_WIDTH + MIN_REVIEW_PANE_WIDTH + SPLITTER_WIDTH;
 
 const STRUGGLE_OPTIONS = [
   { value: 'opening', label: 'Opening' },
@@ -216,24 +224,6 @@ function FeedbackCard({
   );
 }
 
-function Sparkline({ points }: { points: number[] }) {
-  const w = 360, h = 40, pad = 4;
-  // One point can't make a line (i/(length-1) would divide by zero -> NaN path).
-  if (points.length < 2) return null;
-  const max = Math.max(...points, 1), min = Math.min(...points, 0);
-  const xy = points.map((p, i) => [
-    (i / (points.length - 1)) * w,
-    h - pad - ((p - min) / (max - min || 1)) * (h - pad * 2),
-  ]);
-  const last = xy[xy.length - 1];
-  return (
-    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden>
-      <polyline points={xy.map(p => p.join(',')).join(' ')} fill="none" stroke="#e8695c" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={last[0]} cy={last[1]} r={4} fill="#e8695c" />
-    </svg>
-  );
-}
-
 export function SessionDetail({
   id,
   onBack,
@@ -256,7 +246,18 @@ export function SessionDetail({
   const [feedbackLoadedFor, setFeedbackLoadedFor] = useState<string | null>(null);
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [shellWidth, setShellWidth] = useState(0);
+  const [rightPaneWidth, setRightPaneWidth] = useState(DEFAULT_REVIEW_PANE_WIDTH);
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const timer = useRef<ReturnType<typeof setInterval>>();
+
+  const clampReviewPaneWidth = (requested: number, totalWidth: number): number => {
+    const max = Math.max(
+      MIN_REVIEW_PANE_WIDTH,
+      totalWidth - MIN_TRANSCRIPT_PANE_WIDTH - SPLITTER_WIDTH,
+    );
+    return Math.min(Math.max(requested, MIN_REVIEW_PANE_WIDTH), max);
+  };
 
   const applyFeedback = (feedback?: SessionFeedback | null) => {
     if (!feedback) return;
@@ -307,6 +308,28 @@ export function SessionDetail({
     if (!detail?.feedback || feedbackLoadedFor === id) return;
     applyFeedback(detail.feedback);
   }, [detail, feedbackLoadedFor, id]);
+
+  useEffect(() => {
+    const node = shellRef.current;
+    if (!node) return;
+
+    const syncWidth = () => {
+      const nextWidth = node.clientWidth;
+      setShellWidth(nextWidth);
+      setRightPaneWidth(current => clampReviewPaneWidth(current, nextWidth));
+    };
+
+    syncWidth();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(syncWidth);
+      observer.observe(node);
+      return () => observer.disconnect();
+    }
+
+    window.addEventListener('resize', syncWidth);
+    return () => window.removeEventListener('resize', syncWidth);
+  }, [detail]);
 
   // Transcript playback clock. Only runs while actually playing on a session
   // that has a real duration — `% 0` would yield NaN on a 0:00 (no-transcript) call.
@@ -446,9 +469,54 @@ export function SessionDetail({
     );
   }
 
-  const totalEarned = detail.scorecard.reduce((a, c) => a + c.earned, 0);
-  const totalCriteria = detail.scorecard.reduce((a, c) => a + c.total, 0);
-  const ringC = 2 * Math.PI * 32;
+  const splitMode = shellWidth >= SPLIT_BREAKPOINT;
+  const activeReviewPaneWidth = splitMode
+    ? clampReviewPaneWidth(rightPaneWidth, shellWidth || DEFAULT_REVIEW_PANE_WIDTH * 2)
+    : Math.max(shellWidth - 40, 320);
+  const feedbackPanel = feedbackMode !== 'hidden' ? (
+    <FeedbackCard
+      mode={feedbackMode}
+      struggles={struggles}
+      behaviorIssues={behaviorIssues}
+      notes={notes}
+      submittedAt={submittedAt}
+      submitting={submittingFeedback}
+      submitError={feedbackError}
+      onToggleStruggle={value => setStruggles(current => toggleChoice(current, value))}
+      onToggleBehavior={value => setBehaviorIssues(current => toggleChoice(current, value))}
+      onNotesChange={setNotes}
+      onSubmit={saveFeedback}
+    />
+  ) : null;
+  const startResizing = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!splitMode) return;
+    const container = shellRef.current;
+    if (!container) return;
+
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = rightPaneWidth;
+
+    const onMove = (moveEvent: MouseEvent) => {
+      const nextWidth = clampReviewPaneWidth(
+        startWidth - (moveEvent.clientX - startX),
+        container.clientWidth,
+      );
+      setRightPaneWidth(nextWidth);
+    };
+
+    const onUp = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -476,9 +544,20 @@ export function SessionDetail({
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 424px', gridTemplateRows: 'minmax(0, 1fr)', flex: 1, minHeight: 0 }}>
+      <div
+        ref={shellRef}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: splitMode
+            ? `minmax(0, 1fr) ${SPLITTER_WIDTH}px minmax(${MIN_REVIEW_PANE_WIDTH}px, ${activeReviewPaneWidth}px)`
+            : 'minmax(0, 1fr)',
+          gridTemplateRows: splitMode ? 'minmax(0, 1fr)' : 'minmax(340px, .95fr) minmax(420px, 1.05fr)',
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
         {/* transcript column */}
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, borderRight: '1px solid var(--line)', background: 'var(--surface)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, borderRight: splitMode ? 'none' : '1px solid var(--line)', background: 'var(--surface)' }}>
           {/* audio bar */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', borderBottom: '1px solid var(--line)' }}>
             <button
@@ -503,13 +582,8 @@ export function SessionDetail({
             </div>
             <button type="button" className="icon-btn" aria-label="Volume"><Icon name="volume" size={15} /></button>
           </div>
-          {/* transcript search */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>Transcript</span>
-            <div className="field-wrap" style={{ flex: 1, marginBottom: 0 }}>
-              <span className="field-icon"><Icon name="search" size={13} /></span>
-              <input className="field" style={{ padding: '7px 10px 7px 30px', fontSize: 11.5, background: 'var(--surface-inset)' }} placeholder="Search transcript…" aria-label="Search transcript" />
-            </div>
           </div>
           {/* messages */}
           <div className="scroll-y" style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -540,108 +614,39 @@ export function SessionDetail({
           </div>
         </div>
 
-        {/* coaching rail */}
-        <div className="scroll-y" style={{ minWidth: 0, background: 'var(--surface-inset)', overflowY: 'auto' }}>
-          <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* score card */}
-            <div style={{ background: 'linear-gradient(158deg, var(--deep-1), var(--deep-2))', borderRadius: 'var(--r-lg)', padding: 20, color: '#fff', position: 'relative', overflow: 'hidden', boxShadow: 'var(--shadow-lg)' }}>
-              <div style={{ position: 'absolute', inset: '0 0 auto 0', height: 3, background: 'linear-gradient(90deg, var(--brand-strong), var(--brand), #e8695c)' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{ position: 'relative', width: 76, height: 76, flexShrink: 0 }}>
-                  <svg width="76" height="76" viewBox="0 0 76 76">
-                    <circle cx="38" cy="38" r="32" fill="none" stroke="rgba(255,255,255,.12)" strokeWidth={6} />
-                    <circle cx="38" cy="38" r="32" fill="none" stroke="#e8695c" strokeWidth={6} strokeLinecap="round" strokeDasharray={`${(detail.score / 100) * ringC} ${ringC}`} transform="rotate(-90 38 38)" />
-                  </svg>
-                  <span style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 21, fontWeight: 800 }}>{detail.score}</span>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.4px', color: 'rgba(255,255,255,.6)' }}>OVERALL SCORE</div>
-                  <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2 }}>{detail.grade}</div>
-                  {detail.trend.length > 1 && (
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 6, fontSize: 11, fontWeight: 700, color: '#3ddbc4' }}>
-                      <Icon name="analytics" size={12} strokeWidth={2.2} />
-                      {detail.score - detail.trend[detail.trend.length - 2] >= 0 ? '+' : ''}
-                      {detail.score - detail.trend[detail.trend.length - 2]} vs your last {detail.callType}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1px', color: 'rgba(255,255,255,.5)', marginBottom: 6 }}>
-                  LAST {detail.trend.length} SESSIONS
-                </div>
-                <Sparkline points={detail.trend} />
-              </div>
-            </div>
-
-            {/* AI feedback */}
-            {feedbackMode !== 'hidden' && (
-              <FeedbackCard
-                mode={feedbackMode}
-                struggles={struggles}
-                behaviorIssues={behaviorIssues}
-                notes={notes}
-                submittedAt={submittedAt}
-                submitting={submittingFeedback}
-                submitError={feedbackError}
-                onToggleStruggle={value => setStruggles(current => toggleChoice(current, value))}
-                onToggleBehavior={value => setBehaviorIssues(current => toggleChoice(current, value))}
-                onNotesChange={setNotes}
-                onSubmit={saveFeedback}
-              />
-            )}
-
-            <div className="panel" style={{ padding: '18px 20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <Icon name="sparkle" size={16} style={{ color: 'var(--brand)' }} />
-                <span style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--ink)' }}>AI Coach feedback</span>
-              </div>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.8px', color: 'var(--teal)', marginBottom: 8 }}>WHAT WENT WELL</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-                {detail.wentWell.map((w, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 9, fontSize: 12, lineHeight: 1.55, color: 'var(--ink-soft)' }}>
-                    <Icon name="check" size={14} strokeWidth={2.2} style={{ color: 'var(--teal)', flexShrink: 0, marginTop: 2 }} />
-                    <span>{w}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.8px', color: 'var(--brand-ink)', marginBottom: 8 }}>WHAT TO IMPROVE</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {detail.toImprove.map((t, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 9, fontSize: 12, lineHeight: 1.55, color: 'var(--ink-soft)' }}>
-                    <Icon name="target" size={14} strokeWidth={2.2} style={{ color: 'var(--brand)', flexShrink: 0, marginTop: 2 }} />
-                    <span>{t}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* scorecard */}
-            <div className="panel" style={{ padding: '18px 20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <span style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--ink)' }}>Scorecard</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-mute)' }}>{totalEarned} of {totalCriteria} criteria met</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
-                {detail.scorecard.map(c => {
-                  const pct = c.total ? (c.earned / c.total) * 100 : 0;
-                  const color = pct >= 75 ? 'var(--teal)' : pct >= 50 ? 'var(--amber)' : 'var(--brand)';
-                  return (
-                    <div key={c.name} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)' }}>{c.name}</span>
-                        <span style={{ fontSize: 11.5, fontWeight: 700, color }}>{c.earned} / {c.total}</span>
-                      </div>
-                      <div style={{ height: 7, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', borderRadius: 999, width: `${Math.max(pct, 4)}%`, background: color }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+        {splitMode && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize transcript and review panels"
+            onMouseDown={startResizing}
+            title="Drag to resize panels"
+            style={{
+              cursor: 'col-resize',
+              background: 'linear-gradient(180deg, rgba(232,105,92,.12), rgba(17,24,39,.06))',
+              borderLeft: '1px solid rgba(232,105,92,.12)',
+              borderRight: '1px solid rgba(17,24,39,.08)',
+              display: 'grid',
+              placeItems: 'center',
+            }}
+          >
+            <div
+              style={{
+                width: 4,
+                height: 52,
+                borderRadius: 999,
+                background: 'linear-gradient(180deg, var(--brand), rgba(232,105,92,.35))',
+                boxShadow: '0 0 0 1px rgba(255,255,255,.6)',
+              }}
+            />
           </div>
-        </div>
+        )}
+
+        <SessionReviewWorkspace
+          detail={detail}
+          feedbackCard={feedbackPanel}
+          paneWidth={activeReviewPaneWidth}
+        />
       </div>
     </div>
   );

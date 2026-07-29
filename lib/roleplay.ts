@@ -13,10 +13,12 @@ import type { Persona as ApiPersona } from './api';
 export interface Persona {
   id: string;
   name: string;
+  label: string;
   business: string;
   industry: string;
   objection: string;   // signature objection, shown on the card
   scenario: string;    // briefing shown in the summary rail
+  traits: string[];
   custom?: boolean;    // user-created persona
   callType?: string | null;  // custom personas cover exactly one stage
 }
@@ -59,9 +61,8 @@ export function initialsOf(name: string): string {
 // with CALL_TYPE_LABELS in api/history_view.py, which labels the same slugs on
 // the History tab.
 export const CALL_TYPES: CallType[] = [
-  { id: 'call_1', label: 'Call 1 / Discovery' },
+  { id: 'call_1', label: 'Call 1 / Casting Call' },
   { id: 'call_2', label: 'Call 2 / Followup' },
-  { id: 'call_3', label: 'Call 3 / Closing' },
 ];
 
 /** Slug → display label, for screens that only have the slug (e.g. the in-call
@@ -89,10 +90,12 @@ export function mapApiPersona(p: ApiPersona): Persona {
   return {
     id: p.slug,
     name: p.character_name,
+    label: p.persona_label || p.character_name,
     business: p.business_name,
     industry: p.industry,
     objection: p.primary_objection,
     scenario: p.scenario,
+    traits: p.personality_traits ?? [],
     custom: Boolean(p.custom),
     callType: p.call_type ?? null,
   };
@@ -101,8 +104,8 @@ export function mapApiPersona(p: ApiPersona): Persona {
 /* ---------------------------------------------------------- standalone mock */
 // Only used as <RoleplaySetup>'s default prop when no real personas are passed.
 export const MOCK_PERSONAS: Persona[] = [
-  { id: 'marcus', name: 'Marcus Turner', business: 'Turner Logistics', industry: 'Logistics', objection: '"We already have a vendor for this."', scenario: 'Marcus runs ops for a 40-truck fleet and has been burned by training vendors before. He picks up but is guarded — earn 20 seconds, then prove you’re not "another seminar."' },
-  { id: 'dana', name: 'Dana Whitfield', business: 'Whitfield Dental Group', industry: 'Healthcare', objection: '"Send me an email instead."', scenario: 'Dana manages three dental clinics and deflects every call to email. Your job: give her one concrete reason to stay on the line.' },
-  { id: 'raj', name: 'Raj Patel', business: 'Patel & Co Accounting', industry: 'Finance', objection: '"Your price is way too high."', scenario: 'Raj compares everything to spreadsheet cost. He’ll anchor hard on price — quantify the pain before you ever say a number.' },
-  { id: 'elena', name: 'Elena Marsh', business: 'Marsh Realty', industry: 'Real Estate', objection: '"I need to talk to my partner first."', scenario: 'Elena is friendly but never decides alone. Practice isolating the objection and booking the three-way follow-up on the call.' },
+  { id: 'marcus', name: 'Marcus Turner', label: 'Guarded Logistics Operator', business: 'Turner Logistics', industry: 'Logistics', objection: '"We already have a vendor for this."', scenario: 'Marcus runs ops for a 40-truck fleet and has been burned by training vendors before. He picks up but is guarded — earn 20 seconds, then prove you’re not "another seminar."', traits: ['Guarded', 'Results-Driven'] },
+  { id: 'dana', name: 'Dana Whitfield', label: 'Busy Gatekeeping Operator', business: 'Whitfield Dental Group', industry: 'Healthcare', objection: '"Send me an email instead."', scenario: 'Dana manages three dental clinics and deflects every call to email. Your job: give her one concrete reason to stay on the line.', traits: ['Busy', 'Deflective'] },
+  { id: 'raj', name: 'Raj Patel', label: 'Price-Sensitive Analytical Buyer', business: 'Patel & Co Accounting', industry: 'Finance', objection: '"Your price is way too high."', scenario: 'Raj compares everything to spreadsheet cost. He’ll anchor hard on price — quantify the pain before you ever say a number.', traits: ['Analytical', 'Price-Sensitive'] },
+  { id: 'elena', name: 'Elena Marsh', label: 'Friendly Authority-Sharing Buyer', business: 'Marsh Realty', industry: 'Real Estate', objection: '"I need to talk to my partner first."', scenario: 'Elena is friendly but never decides alone. Practice isolating the objection and booking the three-way follow-up on the call.', traits: ['Friendly', 'Authority-Sharing'] },
 ];

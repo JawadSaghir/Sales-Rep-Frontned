@@ -1,6 +1,7 @@
 'use client';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { getSession } from 'next-auth/react';
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -16,6 +17,13 @@ import { Icon } from '../../lib/icons';
 function labelFromSlug(slug: string, fallback: string): string {
   if (!slug) return fallback;
   return slug.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function profileLabel(name: string | null | undefined, email: string | null | undefined): string {
+  const cleanName = typeof name === 'string' ? name.trim().replace(/\s+/g, ' ') : '';
+  if (cleanName) return cleanName;
+  const local = typeof email === 'string' ? email.split('@', 1)[0] : '';
+  return labelFromSlug(local, 'Trainee');
 }
 
 /**
@@ -310,15 +318,34 @@ function RoleplayInner() {
   // which would spawn two rooms and two agents per call, so guard the request.
   const startedRef = useRef(false);
 
-  // rep_slug is gone from the URL — identity now comes from the signed-in
-  // session (the BFF proxy attaches it), not a client-supplied slug. repLabel
-  // stays cosmetic and falls back to "Trainee" with nothing in the URL.
+  // The rep label now comes from the signed-in NextAuth profile, not from the
+  // URL. That keeps the on-call UI aligned with the buyer greeting on call_2.
   const callTypeSlug = searchParams.get('call_type') ?? '';
   const personaSlug = searchParams.get('persona_slug') ?? '';
   const difficulty = searchParams.get('difficulty') ?? '';
-  const repLabel = labelFromSlug(searchParams.get('rep_slug') ?? '', 'Trainee');
+  const [repLabel, setRepLabel] = useState('Trainee');
   const callTypeLabel = callTypeLabelFromSlug(callTypeSlug);
   const personaLabel = labelFromSlug(personaSlug, '');
+  const roleplayHref = `/roleplay?${new URLSearchParams({
+    call_type: callTypeSlug,
+    persona_slug: personaSlug,
+    difficulty,
+  }).toString()}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    getSession()
+      .then((session) => {
+        if (cancelled) return;
+        setRepLabel(profileLabel(session?.user?.name, session?.user?.email));
+      })
+      .catch(() => {
+        if (!cancelled) setRepLabel('Trainee');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!callTypeSlug || !personaSlug || !difficulty) {
@@ -345,6 +372,27 @@ function RoleplayInner() {
       <div style={centerScreenStyle}>
         <div className="live-dot on" style={{ marginBottom: 14 }} />
         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-soft)' }}>Connecting call…</div>
+        <div
+          style={{
+            marginTop: 10,
+            maxWidth: 420,
+            textAlign: 'center',
+            fontSize: 12.5,
+            lineHeight: 1.6,
+            color: 'var(--ink-mute)',
+          }}
+        >
+          If this screen stays here, reload the call page once. In local dev, stale Next.js
+          chunks can leave this shell on screen before the roleplay client finishes booting.
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 18, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <a href={roleplayHref} className="btn btn-ghost">
+            <Icon name="history" size={15} /> Reload call page
+          </a>
+          <a href="/" className="btn btn-light">
+            <Icon name="chevron-left" size={15} /> Back to dashboard
+          </a>
+        </div>
       </div>
     );
   }

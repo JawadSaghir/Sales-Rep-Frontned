@@ -153,15 +153,21 @@ button {
   margin-bottom: 22px;
 }
 .brand-logo {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: linear-gradient(150deg, var(--brand), var(--brand-strong));
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #0b0b0b;
   display: grid;
   place-items: center;
-  color: #fff;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(192, 57, 43, 0.28);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.brand-logo-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .brand-name {
   font-size: 16px;
