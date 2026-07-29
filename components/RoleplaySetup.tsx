@@ -44,6 +44,10 @@ export function RoleplaySetup({
   const [formOpen, setFormOpen] = useState(false);
   const [draft, setDraft] = useState<PersonaDraft>(EMPTY_DRAFT);
   const [formError, setFormError] = useState<string | null>(null);
+  // Separate from formError: the create modal is closed when a rep deletes a
+  // card from the grid, so a delete failure needs a surface that is visible
+  // with the modal shut, not the message that only renders inside it.
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [options, setOptions] = useState<PersonaOptions | null>(null);
   const [otherIndustry, setOtherIndustry] = useState(false);
@@ -126,11 +130,12 @@ export function RoleplaySetup({
 
   const removePersona = async (p: Persona) => {
     if (!confirm(`Remove ${p.name}? Past calls keep their scorecards.`)) return;
+    setDeleteError(null);
     try {
       await deletePersona(p.id);
       setPersonas(prev => prev.filter(x => x.id !== p.id));
-    } catch {
-      setFormError('Could not remove this persona.');
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : `Could not remove ${p.name}.`);
     }
   };
 
@@ -255,6 +260,28 @@ export function RoleplaySetup({
             <span style={{ fontSize: 10.5, color: 'var(--ink-faint)' }}>Build your own buyer &amp; scenario</span>
           </button>
         </div>
+        {deleteError && (
+          <div
+            role="alert"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, marginTop: -14, marginBottom: 24,
+              padding: '9px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              color: 'var(--brand-ink)', background: 'var(--brand-soft)', border: '1px solid var(--brand-line)',
+            }}
+          >
+            <Icon name="faq" size={13} />
+            <span style={{ flex: 1 }}>{deleteError}</span>
+            <button
+              type="button"
+              onClick={() => setDeleteError(null)}
+              aria-label="Dismiss"
+              className="icon-btn"
+              style={{ width: 20, height: 20 }}
+            >
+              <Icon name="x" size={11} strokeWidth={2.5} />
+            </button>
+          </div>
+        )}
 
         {/* step 3 — difficulty */}
         <StepLabel n={3} title="Difficulty" />

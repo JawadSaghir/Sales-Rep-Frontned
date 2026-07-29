@@ -84,3 +84,6 @@ export async function GET(req: Request, ctx: { params: { path: string[] } }) {
 export async function POST(req: Request, ctx: { params: { path: string[] } }) {
   return proxy(req, ctx.params);
 }
+export async function DELETE(req: Request, ctx: { params: { path: string[] } }) {
+  return proxy(req, ctx.params);
+}

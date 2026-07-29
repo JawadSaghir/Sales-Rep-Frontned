@@ -2,7 +2,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { signOut } from 'next-auth/react';
+import { getSession, signOut } from 'next-auth/react';
 import { NAV_ITEMS, FAQS, type Tab } from '../lib/data';
 import { Icon, type IconName } from '../lib/icons';
 import {
@@ -19,9 +19,38 @@ import { SessionDetail } from '../components/SessionDetail';
 import { RoleplaySetup } from '../components/RoleplaySetup';
 import { mapApiPersona, type RoleplayConfig } from '../lib/roleplay';
 
-const PERSONA_CACHE_KEY = 'istv_personas_v2';
+// v2 was one unscoped key shared by every rep on the machine — safe while
+// /api/personas returned only built-ins, but Task 4 made it return the
+// caller's own custom personas too (name, business, objection, full scenario
+// briefing). Scoped per signed-in identity so a second rep on a shared
+// training laptop never has rep A's cache restored on first paint. Bumped to
+// v3 regardless, since the cached payload shape also gained `custom` and
+// `call_type`.
+const PERSONA_CACHE_PREFIX = 'istv_personas_v3:';
 const LEGACY_PERSONA_CACHE_KEY = 'istv_personas_v1';
+const LEGACY_PERSONA_CACHE_KEY_V2 = 'istv_personas_v2';
 const HIDDEN_PERSONA_SLUGS = new Set(['charlie-ritenour']);
+
+function personaCacheKey(identity: string): string {
+  return `${PERSONA_CACHE_PREFIX}${identity}`;
+}
+
+// Best-effort cleanup of every generation of persona cache this browser may
+// hold, called on sign-out. Scoping the key by identity already stops one
+// rep's cache being *read* by the next signed-in rep; this additionally wipes
+// it from disk so it doesn't sit there indefinitely on a shared machine.
+function clearAllPersonaCache(): void {
+  try {
+    localStorage.removeItem(LEGACY_PERSONA_CACHE_KEY);
+    localStorage.removeItem(LEGACY_PERSONA_CACHE_KEY_V2);
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(PERSONA_CACHE_PREFIX)) localStorage.removeItem(key);
+    }
+  } catch {
+    /* storage blocked — nothing to clear */
+  }
+}
 
 function visiblePersonas(items: Persona[]): Persona[] {
   return items.filter(persona => !HIDDEN_PERSONA_SLUGS.has(persona.slug));
@@ -108,7 +137,10 @@ function Sidebar({
       <button
         type="button"
         className="nav-item nav-signout"
-        onClick={() => signOut({ callbackUrl: '/sign-in' })}
+        onClick={() => {
+          clearAllPersonaCache();
+          signOut({ callbackUrl: '/sign-in' });
+        }}
       >
         <span className="nav-label">
           <Icon name="log-out" size={18} />
@@ -296,39 +328,61 @@ function HomeInner() {
   // and the fresh fetch swaps in behind it. Only a first-ever visit (nothing
   // cached) still waits on the network.
   useEffect(() => {
-    let cached: Persona[] | null = null;
-    try {
-      localStorage.removeItem(LEGACY_PERSONA_CACHE_KEY);
-      const raw = localStorage.getItem(PERSONA_CACHE_KEY);
-      if (raw) cached = visiblePersonas(JSON.parse(raw) as Persona[]);
-    } catch {
-      cached = null; // corrupt cache — fall through to the network
-    }
-    if (cached && cached.length > 0) {
-      setPersonas(cached);
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
-    setError(null);
-    getPersonas()
-      .then((fresh) => {
-        const visible = visiblePersonas(fresh);
-        setPersonas(visible);
-        try {
-          localStorage.setItem(PERSONA_CACHE_KEY, JSON.stringify(visible));
-        } catch {
-          /* storage full/blocked — the fetch still rendered */
-        }
-      })
-      .catch((e: unknown) => {
-        // With a cached catalog on screen, a background refresh failure is
-        // not worth an error screen; without one, it is.
-        if (!cached || cached.length === 0) {
-          setError(e instanceof Error ? e.message : 'Failed to load personas');
-        }
-      })
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    (async () => {
+      // getSession() hits NextAuth's own /api/auth/session route, not the
+      // FastAPI backend, so it resolves fast even while the API is still
+      // cold-starting — the identity lookup doesn't reintroduce the delay
+      // the cache exists to hide. Falls back to a shared key only if the
+      // session genuinely can't be read (still never surfaces another rep's
+      // cache: their entry lives under their own key, not this one).
+      const session = await getSession().catch(() => null);
+      const identity = session?.user?.email ?? 'unknown';
+      const cacheKey = personaCacheKey(identity);
+
+      let cached: Persona[] | null = null;
+      try {
+        localStorage.removeItem(LEGACY_PERSONA_CACHE_KEY);
+        localStorage.removeItem(LEGACY_PERSONA_CACHE_KEY_V2);
+        const raw = localStorage.getItem(cacheKey);
+        if (raw) cached = visiblePersonas(JSON.parse(raw) as Persona[]);
+      } catch {
+        cached = null; // corrupt cache — fall through to the network
+      }
+      if (cancelled) return;
+      if (cached && cached.length > 0) {
+        setPersonas(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+      getPersonas()
+        .then((fresh) => {
+          if (cancelled) return;
+          const visible = visiblePersonas(fresh);
+          setPersonas(visible);
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify(visible));
+          } catch {
+            /* storage full/blocked — the fetch still rendered */
+          }
+        })
+        .catch((e: unknown) => {
+          if (cancelled) return;
+          // With a cached catalog on screen, a background refresh failure is
+          // not worth an error screen; without one, it is.
+          if (!cached || cached.length === 0) {
+            setError(e instanceof Error ? e.message : 'Failed to load personas');
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Reps are only needed for the Analytics tab and to label the session; they
