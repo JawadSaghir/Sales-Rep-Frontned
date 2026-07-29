@@ -5,6 +5,13 @@ const DEFAULT_ALLOWED_DOMAINS = [
   "nextlevelceotv.com",
 ];
 
+function normalizedDomainList(value: string | undefined) {
+  return value
+    ?.split(",")
+    .map((domain) => domain.trim().toLowerCase().replace(/^@/, ""))
+    .filter(Boolean) ?? [];
+}
+
 export function normalizeAuthEmail(email: string | null | undefined) {
   const normalized = email?.trim().toLowerCase();
   return normalized || null;
@@ -17,11 +24,8 @@ export function getAuthEmailDomain(email: string | null | undefined) {
 }
 
 export function getAllowedAuthDomains() {
-  const configured = process.env.AUTH_ALLOWED_DOMAINS?.split(",")
-    .map((domain) => domain.trim().toLowerCase().replace(/^@/, ""))
-    .filter(Boolean);
-
-  return configured?.length ? configured : DEFAULT_ALLOWED_DOMAINS;
+  const configured = normalizedDomainList(process.env.AUTH_ALLOWED_DOMAINS);
+  return Array.from(new Set([...DEFAULT_ALLOWED_DOMAINS, ...configured]));
 }
 
 export function isAllowedAuthEmail(email: string | null | undefined) {
