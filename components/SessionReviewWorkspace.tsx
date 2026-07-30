@@ -50,6 +50,10 @@ function statusTone(status: string): {
       return { bg: 'rgba(243, 156, 18, .12)', fg: 'var(--amber)', border: 'rgba(243, 156, 18, .24)', label: 'Mixed' };
     case 'weak':
       return { bg: 'var(--brand-soft)', fg: 'var(--brand-ink)', border: 'var(--brand-line)', label: 'Weak' };
+    case 'neutral':
+      // Valence-free by design: the API sends `neutral` for counts that are context,
+      // not performance. Rendering it as "Limited" read as a judgment it never made.
+      return { bg: 'var(--surface-3)', fg: 'var(--ink-mute)', border: 'var(--line)', label: 'Context' };
     default:
       return { bg: 'var(--surface-3)', fg: 'var(--ink-mute)', border: 'var(--line)', label: 'Limited' };
   }
