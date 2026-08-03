@@ -4,6 +4,8 @@
 // to FastAPI. The browser never talks to FastAPI directly.
 import { SignJWT } from 'jose';
 import { auth } from '../../../../auth';
+// TEMPORARY — demo bypass link. Remove with lib/demo-access.ts.
+import { isDemoDoorOpen, isDemoEmail } from '../../../../lib/demo-access';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8000';
 const AUDIENCE = 'istv-api';
@@ -42,6 +44,10 @@ async function proxy(req: Request, params: { path: string[] }): Promise<Response
   const session = await auth();
   const email = session?.user?.email;
   if (!email) return fail(401, 'signed out');
+  // The real kill switch. This route reads env at request time (Node runtime),
+  // so clearing DEMO_ACCESS_TOKEN cuts off data access immediately — unlike
+  // middleware, whose env is inlined into the edge bundle at build time.
+  if (isDemoEmail(email) && !isDemoDoorOpen()) return fail(401, 'demo access has ended');
   const repName = displayName(session?.user?.name);
 
   let token: string;
