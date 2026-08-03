@@ -62,6 +62,7 @@ export function initialsOf(name: string): string {
 // the History tab.
 export const CALL_TYPES: CallType[] = [
   { id: 'call_1', label: 'Call 1 / Casting Call' },
+  { id: 'call_1_rebook', label: 'Call 1 / Casting Call (Re-book)' },
   { id: 'call_2', label: 'Call 2 / Closing' },
 ];
 
