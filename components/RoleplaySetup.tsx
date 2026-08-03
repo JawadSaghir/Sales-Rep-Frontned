@@ -48,6 +48,11 @@ export function RoleplaySetup({
   // card from the grid, so a delete failure needs a surface that is visible
   // with the modal shut, not the message that only renders inside it.
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // In-flight guard for the create POST. Without it the Save button stayed
+  // live during the request, so one save intent became N POSTs: the first few
+  // each created a duplicate persona and the rest 400'd on the server's
+  // MAX_CUSTOM_PERSONAS quota once the extras had filled it.
+  const [saving, setSaving] = useState(false);
 
   const [options, setOptions] = useState<PersonaOptions | null>(null);
   const [otherIndustry, setOtherIndustry] = useState(false);
@@ -105,6 +110,9 @@ export function RoleplaySetup({
   }, [draft.call_type, options, touchedObjections]);
 
   const saveForm = async () => {
+    // Belt to the disabled button's braces: a keyboard repeat or a double
+    // click can queue a second call before React has re-rendered the button.
+    if (saving) return;
     if (!draft.name.trim() || !draft.scenario.trim()) {
       setFormError('Name and scenario briefing are required.');
       return;
@@ -113,6 +121,7 @@ export function RoleplaySetup({
       setFormError('Pick at least one objection.');
       return;
     }
+    setSaving(true);
     try {
       const created = await createPersona(draft);
       const mapped = mapApiPersona(created);
@@ -125,6 +134,8 @@ export function RoleplaySetup({
       setFormOpen(false);
     } catch (e) {
       setFormError(e instanceof Error ? e.message : 'Could not save this persona.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -489,8 +500,8 @@ export function RoleplaySetup({
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 22px', borderTop: '1px solid var(--surface-3)', background: 'var(--surface-2)', borderRadius: '0 0 16px 16px' }}>
               <button type="button" className="btn btn-ghost" onClick={() => setFormOpen(false)}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={saveForm}>
-                <Icon name="check" size={14} strokeWidth={2} /> Save &amp; select
+              <button type="button" className="btn btn-primary" onClick={saveForm} disabled={saving}>
+                <Icon name="check" size={14} strokeWidth={2} /> {saving ? 'Saving…' : 'Save & select'}
               </button>
             </div>
           </div>
