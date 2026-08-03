@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '../lib/icons';
 import { createPersona, deletePersona, getPersonaOptions, type PersonaOptions } from '../lib/api';
 import {
-  CALL_TYPES, DIFFICULTIES, MOCK_PERSONAS, initialsOf, mapApiPersona,
+  CALL_TYPES, DIFFICULTIES, MOCK_PERSONAS, initialsOf, mapApiPersona, personaBlurb,
   type Persona, type PersonaDraft, type RoleplayConfig,
 } from '../lib/roleplay';
 
@@ -195,6 +195,9 @@ export function RoleplaySetup({
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 24 }}>
           {filtered.map(p => {
             const active = persona.id === p.id;
+            // What distinguishes THIS buyer. Falls back to the signature
+            // objection, which is the rep's own text on a custom persona.
+            const blurb = personaBlurb(p.scenario, p.name) || p.objection;
             return (
               <button
                 key={p.id}
@@ -265,9 +268,11 @@ export function RoleplaySetup({
                     ))}
                   </span>
                 )}
-                <span style={{ fontSize: 11, lineHeight: 1.5, color: 'var(--ink-soft)', background: 'var(--surface-inset)', border: '1px solid var(--surface-3)', borderRadius: 8, padding: '7px 10px', display: 'block', textAlign: 'left' }}>
-                  {p.objection}
-                </span>
+                {blurb && (
+                  <span style={{ fontSize: 11, lineHeight: 1.5, color: 'var(--ink-soft)', background: 'var(--surface-inset)', border: '1px solid var(--surface-3)', borderRadius: 8, padding: '7px 10px', display: 'block', textAlign: 'left' }}>
+                    {blurb}
+                  </span>
+                )}
               </button>
             );
           })}

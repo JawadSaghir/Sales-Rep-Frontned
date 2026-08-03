@@ -16,8 +16,11 @@ export interface Persona {
   label: string;
   business: string;
   industry: string;
-  objection: string;   // signature objection, shown on the card
-  scenario: string;    // briefing shown in the summary rail
+  // Signature objection. Rep-authored on a custom persona; on a built-in the
+  // API derives it at call_2, so it is identical across built-ins — which is why
+  // the card shows personaBlurb(scenario) instead and this is only its fallback.
+  objection: string;
+  scenario: string;    // briefing: full text in the summary rail, excerpt on the card
   traits: string[];
   custom?: boolean;    // user-created persona
   callType?: string | null;  // custom personas cover exactly one stage
@@ -53,6 +56,39 @@ export interface PersonaDraft {
 
 export function initialsOf(name: string): string {
   return name.split(' ').filter(Boolean).map(w => w[0]?.toUpperCase() ?? '').join('').slice(0, 2);
+}
+
+/** Short, buyer-distinguishing line for a picker card.
+ *
+ *  Replaces `primary_objection` there. The API derives that field with
+ *  `call_type` pinned to "call_2" (see _built_in_personas in
+ *  api/routers/catalog.py), and `ObjectionPack.primary` is just `cards[0]` —
+ *  money for every built-in at that stage. So every card rendered the SAME
+ *  trigger, giving a rep nothing to choose between buyers on, and it rendered
+ *  even with call_1 selected, where no price exists for the buyer at all.
+ *
+ *  The lead-in is dropped because every built-in briefing opens with
+ *  "You're calling <Name>, who runs <Business> — …", which the card already
+ *  shows as its title and subtitle. What follows is the part that actually
+ *  differs between buyers: tenure, footprint, how the business is run. The full
+ *  text still appears verbatim in the "Your scenario" detail panel. */
+export function personaBlurb(scenario: string, name: string, limit = 130): string {
+  const text = (scenario ?? '').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  const firstName = name.trim().split(' ')[0] ?? '';
+  // Split on '. ' rather than a `(?<=\.)` lookbehind: Safari only shipped
+  // lookbehind in 16.4, and the worst case of a mis-split here is a slightly
+  // shorter blurb, not a crash.
+  const parts = text.split('. ');
+  const body =
+    firstName && parts.length > 1 && parts[0].includes(firstName)
+      ? parts.slice(1).join('. ')
+      : text;
+  const clean = body.replace(/\.+$/, '.');
+  if (clean.length <= limit) return clean;
+  const cut = clean.slice(0, limit);
+  const at = cut.lastIndexOf(' ');
+  return `${(at > 40 ? cut.slice(0, at) : cut).replace(/[,;:.\s]+$/, '')}…`;
 }
 
 /* ---------------------------------------------------------------- config */
