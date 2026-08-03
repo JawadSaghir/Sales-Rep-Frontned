@@ -62,6 +62,23 @@ every API call 401s, so no data is reachable.
 
 ## Deleting it for good
 
+Run the script. It derives the removal from the introducing commit, split by
+change type — files the feature *added* are deleted outright, files it
+*patched* get a reverse three-way apply so unrelated later edits to them
+survive. It then strips the env vars and verifies the result:
+
+```
+bash scripts/remove-demo-access.sh --dry-run   # show the plan
+bash scripts/remove-demo-access.sh             # do it
+```
+
+It refuses rather than clobbering if those files have uncommitted edits, exits
+0 if the feature is already gone, and leaves the removal staged-but-uncommitted
+so `git checkout -- .` backs out. It then prints the steps it cannot do for you
+(Vercel env vars, the subtree publish, purging demo rows).
+
+The manual equivalent, if the revert ever conflicts:
+
 1. `frontend/lib/demo-access.ts` — delete
 2. `frontend/app/api/demo/` — delete the directory
 3. `frontend/DEMO-ACCESS.md` — delete this file
