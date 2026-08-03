@@ -4,6 +4,7 @@
 // to FastAPI. The browser never talks to FastAPI directly.
 import { SignJWT } from 'jose';
 import { auth } from '../../../../auth';
+import { shouldRetry, type Failure } from '../../../../lib/proxy-retry';
 // TEMPORARY — demo bypass link. Remove with lib/demo-access.ts.
 import { isDemoDoorOpen, isDemoEmail } from '../../../../lib/demo-access';
 
@@ -14,10 +15,18 @@ const AUDIENCE = 'istv-api';
 // rides out a restart blip, it does NOT cover a full free-plan cold start
 // (30-60s) — only taking the API off `plan: free` does that.
 const RETRY_DELAYS_MS = [400, 1_200, 2_500];
-// Vercel's default function ceiling is 10s. Stop well short so a slow upstream
-// yields our own JSON error rather than the platform's timeout page, which
-// would break the envelope contract described above.
-const RETRY_BUDGET_MS = 6_000;
+
+// Hard ceiling on ONE upstream attempt. Without this the fetch has no timeout at
+// all, and Render's edge HOLDS a request open while a free instance spins up —
+// so on 2026-08-03 `GET /api/sessions` hung until Vercel killed the invocation
+// at 300s ("Vercel Runtime Timeout Error"), four times in eight minutes. History
+// polls every 4s, so each poll stacked another 300s invocation. Same rule as
+// psycopg's connect_timeout in api/db.py (AGENTS.md invariant 2): nothing on a
+// user-facing path gets an unbounded network call.
+const ATTEMPT_TIMEOUT_MS = 12_000;
+// Ceiling on all attempts together, so the rep gets a readable error in seconds
+// rather than minutes. Well inside Vercel's 300s function limit.
+const TOTAL_DEADLINE_MS = 30_000;
 
 function displayName(value: unknown): string {
   return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, 120) : '';
@@ -47,27 +56,6 @@ function fail(status: number, error: string): Response {
 
 function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
-}
-
-/** Whether a failed upstream attempt is safe AND worth replaying.
- *
- *  `status === null` means fetch threw, i.e. nothing was listening — the request
- *  never reached FastAPI. Render's edge answers 503 when no instance is ready,
- *  which likewise means it never arrived. Neither can have had a side effect, so
- *  replaying is safe even for POST /api/sessions, where a duplicate would mint a
- *  second LiveKit room and a second session row.
- *
- *  A 502/504 *status* is the ambiguous case: the gateway may have given up AFTER
- *  the app processed the request. Those are replayed only for GET/HEAD, where a
- *  duplicate costs nothing. Everything else (4xx, 5xx from the app itself) is a
- *  real answer and must be surfaced, not retried.
- *
- *  Exported for verification: this file has no unit-test runner, so the truth
- *  table is checked directly against this function. */
-export function shouldRetry(method: string, status: number | null): boolean {
-  if (status === null || status === 503) return true;
-  const idempotent = method === 'GET' || method === 'HEAD';
-  return idempotent && (status === 502 || status === 504);
 }
 
 async function proxy(req: Request, params: { path: string[] }): Promise<Response> {
@@ -100,6 +88,7 @@ async function proxy(req: Request, params: { path: string[] }): Promise<Response
 
   const started = Date.now();
   let upstream: Response | null = null;
+  let failure: Failure = 'unreachable';
   let lastErr = '';
 
   for (let attempt = 0; ; attempt++) {
@@ -114,19 +103,26 @@ async function proxy(req: Request, params: { path: string[] }): Promise<Response
         },
         body,
         cache: 'no-store',
+        // The whole point: bound the attempt. See ATTEMPT_TIMEOUT_MS.
+        signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
       });
     } catch (err) {
-      lastErr = message(err);
+      // A timeout means WE gave up, so the API may have processed the request
+      // anyway; a connection error means it never arrived. shouldRetry treats
+      // those differently, so the distinction has to survive to there.
+      const name = err instanceof Error ? err.name : '';
+      failure = name === 'TimeoutError' || name === 'AbortError' ? 'timeout' : 'unreachable';
+      lastErr = `${failure}: ${message(err)}`;
     }
 
+    const outcome: number | Failure = upstream === null ? failure : upstream.status;
     const delay = RETRY_DELAYS_MS[attempt];
-    if (!shouldRetry(method, upstream === null ? null : upstream.status)) break;
-    if (delay === undefined || Date.now() - started + delay > RETRY_BUDGET_MS) break;
+    if (!shouldRetry(method, outcome)) break;
+    if (delay === undefined) break;
+    // Leave room for the replay itself, so we never blow the total deadline.
+    if (Date.now() - started + delay + ATTEMPT_TIMEOUT_MS > TOTAL_DEADLINE_MS) break;
 
-    console.warn(
-      `[bff] ${method} ${target} unavailable (${upstream ? upstream.status : lastErr}); ` +
-        `retry ${attempt + 1} in ${delay}ms`,
-    );
+    console.warn(`[bff] ${method} ${target} -> ${outcome}; retry ${attempt + 1} in ${delay}ms`);
     await new Promise(resolve => setTimeout(resolve, delay));
   }
 
@@ -134,8 +130,10 @@ async function proxy(req: Request, params: { path: string[] }): Promise<Response
     // Distinguished from the 500 above on purpose: the API being down and the
     // proxy being misconfigured look identical in the browser but need opposite
     // fixes. 502 = "the thing behind me is unreachable".
-    console.error(`[bff] upstream unreachable at ${target}:`, lastErr);
-    return fail(502, `cannot reach the API at ${BACKEND} — it may still be waking up`);
+    console.error(`[bff] ${method} ${target} failed after ${Date.now() - started}ms:`, lastErr);
+    return failure === 'timeout'
+      ? fail(504, 'the API did not respond in time — it may be waking up, try again in a moment')
+      : fail(502, `cannot reach the API at ${BACKEND} — it may still be waking up`);
   }
 
   const text = await upstream.text();
