@@ -62,7 +62,7 @@ export function initialsOf(name: string): string {
 // the History tab.
 export const CALL_TYPES: CallType[] = [
   { id: 'call_1', label: 'Call 1 / Casting Call' },
-  { id: 'call_2', label: 'Call 2 / Followup' },
+  { id: 'call_2', label: 'Call 2 / Closing' },
 ];
 
 /** Slug → display label, for screens that only have the slug (e.g. the in-call
