@@ -584,7 +584,11 @@ export async function getScenarios(): Promise<Scenario[]> {
     // Difficulty is a per-session dial in our model, not a property of a
     // scenario, so there is no single value to show here.
     difficulty: "Any",
-    persona: persona.primary_objection || persona.industry,
+    // industry, NOT primary_objection. That field holds the objection's trigger
+    // sentence ("a price is first named — the number lands higher than you were
+    // bracing for"), which rendered as gibberish in a slot labelled "Persona:".
+    // The character's name is already in `name` above.
+    persona: persona.industry || persona.primary_objection,
     assignedTo: 0,
     completed: 0,
     avg: 0,
