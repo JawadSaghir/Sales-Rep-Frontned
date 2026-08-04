@@ -7,12 +7,29 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-/** Copy carried over from /sign-in: the dominant failure is a non-approved domain. */
-const REJECTED =
-  "This Google account is not approved for ISTV AI MOCK Calls. Use your Inside Success TV, Inside Success, Mawer Capital, or Next Level CEO TV email.";
+/**
+ * These are not interchangeable, and saying the wrong one sends someone hunting
+ * the wrong problem: "Configuration" is a server-side failure (most often the
+ * outbound call to Google's discovery endpoint — see lib/oauth-fetch.ts), NOT a
+ * rejected account. Telling a valid admin their email is not approved because
+ * the network blipped is worse than saying nothing.
+ */
+const ERROR_MESSAGES: Record<string, string> = {
+  AccessDenied:
+    "This Google account is not approved for ISTV AI MOCK Calls. Use your Inside Success TV, Inside Success, Mawer Capital, or Next Level CEO TV email.",
+  Configuration: "Sign-in could not reach Google just now. Try again in a moment.",
+  DemoExpired: "That demo link has expired. Ask for a fresh one, or sign in with your company account.",
+};
+
+const ERROR_FALLBACK = "Sign-in did not complete. Try again.";
 
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function errorMessageFor(code: string | undefined): string | undefined {
+  if (!code) return undefined;
+  return ERROR_MESSAGES[code] ?? ERROR_FALLBACK;
 }
 
 /**
@@ -40,7 +57,7 @@ export default function LoginPage({
     <LoginPanel
       initialRole={initialRole}
       callbackUrl={safeRedirect(first(searchParams.callbackUrl))}
-      errorMessage={first(searchParams.error) ? REJECTED : undefined}
+      errorMessage={errorMessageFor(first(searchParams.error))}
     />
   );
 }

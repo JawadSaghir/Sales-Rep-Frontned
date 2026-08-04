@@ -20,7 +20,7 @@ export default auth((request) => {
     && isDemoEmail(request.auth?.user?.email)
     && !isDemoDoorOpen()
   ) {
-    return NextResponse.redirect(new URL("/sign-in?error=DemoExpired", nextUrl));
+    return NextResponse.redirect(new URL("/login?error=DemoExpired", nextUrl));
   }
 
   if (PUBLIC_PATHS.has(nextUrl.pathname)) {

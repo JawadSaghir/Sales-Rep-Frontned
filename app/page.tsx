@@ -144,7 +144,7 @@ function Sidebar({
         className="nav-item nav-signout"
         onClick={() => {
           clearAllPersonaCache();
-          signOut({ callbackUrl: '/sign-in' });
+          signOut({ callbackUrl: '/login' });
         }}
       >
         <span className="nav-label">
