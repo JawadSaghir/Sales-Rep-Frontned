@@ -13,8 +13,10 @@ type GoogleProfile = {
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
   pages: {
-    signIn: "/sign-in",
-    error: "/sign-in",
+    // The admin console's login screen replaced /sign-in. The old page is still
+    // on disk and still public in middleware.ts, just no longer referenced.
+    signIn: "/login",
+    error: "/login",
   },
   providers: [
     Google({

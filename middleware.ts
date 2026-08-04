@@ -3,7 +3,10 @@ import { auth } from "./auth";
 // TEMPORARY — demo bypass link. Remove with lib/demo-access.ts.
 import { isDemoDoorOpen, isDemoEmail } from "./lib/demo-access";
 
-const PUBLIC_PATHS = new Set(["/sign-in"]);
+// /login is the admin-console sign-in screen and is now the entry point for
+// everyone. /sign-in stays public so any bookmark or in-flight redirect still
+// resolves rather than bouncing in a loop.
+const PUBLIC_PATHS = new Set(["/login", "/sign-in"]);
 
 export default auth((request) => {
   const { nextUrl } = request;
@@ -29,7 +32,7 @@ export default auth((request) => {
   }
 
   if (!request.auth?.user) {
-    const signInUrl = new URL("/sign-in", nextUrl);
+    const signInUrl = new URL("/login", nextUrl);
     signInUrl.searchParams.set("callbackUrl", `${nextUrl.pathname}${nextUrl.search}`);
     return NextResponse.redirect(signInUrl);
   }

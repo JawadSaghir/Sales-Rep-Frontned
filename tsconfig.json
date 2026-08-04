@@ -16,6 +16,12 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
     "plugins": [
       {
         "name": "next"
@@ -30,6 +36,8 @@
   ],
   "exclude": [
     "node_modules",
-    "Roleplay"
+    "Roleplay",
+    "Login and admin dashboard redesign",
+    "nextjs"
   ]
 }

@@ -19,3 +19,12 @@ out/
 
 # Vercel CLI link data
 .vercel
+
+# Incoming design bundles. Source material, already landed into app/, components/
+# and lib/ — kept locally for reference but never committed: this directory is
+# git-subtree-pushed to the public frontend repo, and these folders are also
+# excluded from tsconfig.json (their un-renamed `-repId-` files import a
+# lib/data.ts that means something else here, so tsc fails on them).
+/Login and admin dashboard redesign/
+/nextjs/
+INTEGRATION_PROMPT.md

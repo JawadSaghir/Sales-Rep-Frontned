@@ -44,7 +44,10 @@ export function HistoryList({
   repSlug,
 }: {
   onOpen: (id: string) => void;
-  onStart: () => void;
+  // Omit to render the list read-only, without "Start a roleplay". The admin
+  // console mounts it that way (components/admin/AdminRepHistory.tsx): a manager
+  // reviewing someone else's history has no call to launch.
+  onStart?: () => void;
   // Admin drill-in: scope the list to one rep's sessions (GET /api/sessions?rep_slug=…).
   // Undefined -> the caller's own history, same as before this prop existed.
   repSlug?: string;
@@ -115,9 +118,11 @@ export function HistoryList({
             {sessions.length} sessions · reviewed transcripts, scores and coaching.
           </p>
         </div>
-        <button type="button" className="btn btn-primary" onClick={onStart}>
-          <Icon name="sparkle" size={15} /> Start a roleplay
-        </button>
+        {onStart && (
+          <button type="button" className="btn btn-primary" onClick={onStart}>
+            <Icon name="sparkle" size={15} /> Start a roleplay
+          </button>
+        )}
       </div>
 
       {/* stats strip */}

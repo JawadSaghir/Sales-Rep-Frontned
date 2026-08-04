@@ -229,11 +229,17 @@ export function SessionDetail({
   onBack,
   onRetry,
   feedbackMode = 'hidden',
+  readOnly = false,
 }: {
   id: string;
   onBack: () => void;
   onRetry: () => void;
   feedbackMode?: FeedbackMode;
+  // Hides the rep-only actions (Export, Retry scenario) so a manager reviewing
+  // someone else's call gets a genuinely read-only screen. The admin console
+  // mounts it this way (components/admin/AdminCallReview.tsx); pair it with
+  // feedbackMode="readonly".
+  readOnly?: boolean;
 }) {
   const [detail, setDetail] = useState<Detail | PendingSession | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -538,10 +544,14 @@ export function SessionDetail({
             </div>
           </div>
         </div>
-        <button type="button" className="btn btn-ghost" style={{ padding: '9px 14px', fontSize: 12.5 }}>Export</button>
-        <button type="button" className="btn btn-primary" style={{ padding: '9px 14px', fontSize: 12.5 }} onClick={onRetry}>
-          <Icon name="history" size={14} /> Retry scenario
-        </button>
+        {!readOnly && (
+          <>
+            <button type="button" className="btn btn-ghost" style={{ padding: '9px 14px', fontSize: 12.5 }}>Export</button>
+            <button type="button" className="btn btn-primary" style={{ padding: '9px 14px', fontSize: 12.5 }} onClick={onRetry}>
+              <Icon name="history" size={14} /> Retry scenario
+            </button>
+          </>
+        )}
       </div>
 
       <div
