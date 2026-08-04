@@ -384,9 +384,11 @@ export function SessionDetail({
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 24px', background: 'var(--surface)', borderBottom: '1px solid var(--line)' }}>
-          <button type="button" className="btn btn-ghost" style={{ padding: '8px 12px', fontSize: 12 }} onClick={onBack}>
-            <Icon name="chevron-left" size={14} /> History
-          </button>
+          {!readOnly && (
+            <button type="button" className="btn btn-ghost" style={{ padding: '8px 12px', fontSize: 12 }} onClick={onBack}>
+              <Icon name="chevron-left" size={14} /> History
+            </button>
+          )}
           {pendingTranscript.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0, flex: 1 }}>
               <span className="avatar" style={{ width: 36, height: 36 }}>{initialsOf(personaName)}</span>
@@ -528,9 +530,14 @@ export function SessionDetail({
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 24px', background: 'var(--surface)', borderBottom: '1px solid var(--line)' }}>
-        <button type="button" className="btn btn-ghost" style={{ padding: '8px 12px', fontSize: 12 }} onClick={onBack}>
-          <Icon name="chevron-left" size={14} /> History
-        </button>
+        {/* readOnly: the admin call-review page already renders a back button
+            ("‹ {rep name}") directly above this one, and a second one labelled
+            "History" pointed somewhere else entirely. */}
+        {!readOnly && (
+          <button type="button" className="btn btn-ghost" style={{ padding: '8px 12px', fontSize: 12 }} onClick={onBack}>
+            <Icon name="chevron-left" size={14} /> History
+          </button>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0, flex: 1 }}>
           <span className="avatar" style={{ width: 36, height: 36 }}>{initialsOf(detail.persona)}</span>
           <div style={{ minWidth: 0 }}>

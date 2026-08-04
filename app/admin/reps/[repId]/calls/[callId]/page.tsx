@@ -56,12 +56,17 @@ export default async function CallReviewPage({
         // SessionDetail's root is height:100% and owns its own internal
         // scrolling, so it needs a definite height to lay out against: an
         // auto-height parent collapses its transcript/scorecard split.
+        //
+        // Block, NOT flex. As a flex item its root sized to its content, so the
+        // width it measures for itself came out under SPLIT_BREAKPOINT (872px)
+        // and it fell back to the stacked layout — transcript above, review
+        // below, needing 760px of height inside a ~700px card. As a block child
+        // it fills the card's width and splits side by side as intended.
         <section
           style={{
             ...card,
             overflow: "hidden",
-            display: "flex",
-            height: "calc(100vh - 210px)",
+            height: "calc(100vh - 190px)",
             minHeight: 560,
           }}
         >
