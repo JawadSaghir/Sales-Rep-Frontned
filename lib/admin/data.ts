@@ -196,9 +196,13 @@ function seriesFromSessions(sessions: ApiSessionSummary[]): number[] {
     .reverse(); // API returns newest first
 }
 
-/** Latest score against the mean of the ones before it, per lib/types.ts. */
-function deltaFromSeries(series: number[]): number {
-  if (series.length < 2) return 0;
+/**
+ * Latest score against the mean of the ones before it, per lib/types.ts.
+ * null when there is nothing to compare — one score is not a trend, and zero
+ * scores are not "no change".
+ */
+function deltaFromSeries(series: number[]): number | null {
+  if (series.length < 2) return null;
   const latest = series[series.length - 1];
   return Math.round(latest - mean(series.slice(0, -1)));
 }
@@ -234,9 +238,9 @@ function streakFromSessions(sessions: ApiSessionSummary[], lastActive: Date, now
   return streak;
 }
 
-function repStatus(series: number[], avg: number, idleDays: number): RepStatus {
+function repStatus(avg: number | null, idleDays: number): RepStatus {
   // Nothing scored yet is not a failing grade — it is something to watch.
-  if (series.length === 0) return "Watch";
+  if (avg === null) return "Watch";
   if (avg < WATCH_MIN_AVG) return "Needs coaching";
   if (idleDays >= IDLE_WATCH_DAYS) return "Watch";
   return avg >= ON_TRACK_MIN_AVG ? "On track" : "Watch";
@@ -259,6 +263,7 @@ function buildRep(entry: ApiRosterEntry, sessions: ApiSessionSummary[], now: Dat
   const reference = lastActiveValid ? lastActive : now;
 
   const series = seriesFromSessions(sessions);
+  const avg = series.length > 0 ? Math.round(mean(series)) : null;
   const idleDays = lastActiveValid ? daysBetween(lastActive, now) : 0;
   const practicedSeconds = sessions.reduce((total, session) => total + (session.durationSec || 0), 0);
 
@@ -274,7 +279,7 @@ function buildRep(entry: ApiRosterEntry, sessions: ApiSessionSummary[], now: Dat
     // excludes abandoned rooms; the roster's `calls` includes them. Match the
     // rep side.
     sessions: sessions.length,
-    avg: Math.round(mean(series)),
+    avg,
     delta: deltaFromSeries(series),
     // Unavailable: objection handling is only broken out per session, inside
     // GET /api/sessions/{id}. A per-rep rate would cost one request per session
@@ -283,7 +288,7 @@ function buildRep(entry: ApiRosterEntry, sessions: ApiSessionSummary[], now: Dat
     practicedHours: Math.round((practicedSeconds / 3600) * 10) / 10,
     streakDays: streakFromSessions(sessions, reference, now),
     idleDays,
-    status: repStatus(series, Math.round(mean(series)), idleDays),
+    status: repStatus(avg, idleDays),
     series,
   };
 }
@@ -314,7 +319,10 @@ export const getTeam = cache(async (): Promise<Rep[]> => {
     }),
   );
 
-  return reps.sort((a, b) => b.avg - a.avg);
+  // Best average first; never-scored reps sort to the bottom rather than
+  // pretending to be a 0.
+  const rank = (rep: Rep) => rep.avg ?? -1;
+  return reps.sort((a, b) => rank(b) - rank(a));
 });
 
 /**
@@ -340,7 +348,9 @@ export function repKeyOf(repId: string): string | null {
 export async function getTeamKpis() {
   const reps = await getTeam();
   const now = new Date();
-  const scored = reps.filter((rep) => rep.series.length > 0);
+  // flatMap rather than filter+map so the nulls are dropped and the result is
+  // number[] without an assertion.
+  const scoredAvgs = reps.flatMap((rep) => (rep.avg === null ? [] : [rep.avg]));
 
   // Week-over-week needs real timestamps, so it is computed from the session
   // dates rather than the mock's hardcoded numbers.
@@ -362,7 +372,7 @@ export async function getTeamKpis() {
   return {
     sessions: reps.reduce((total, rep) => total + rep.sessions, 0),
     sessionsDelta: recentSessions,
-    avgScore: Math.round(mean(scored.map((rep) => rep.avg))),
+    avgScore: scoredAvgs.length ? Math.round(mean(scoredAvgs)) : null,
     avgDelta:
       recent.length && earlier.length ? Math.round(mean(recent) - mean(earlier)) : 0,
     // See Rep.objectionPct — no aggregate exists. null renders as "—".
@@ -594,7 +604,7 @@ export async function getAlerts(): Promise<Alert[]> {
   const alerts: Alert[] = [];
 
   for (const rep of reps) {
-    if (rep.series.length > 0 && rep.avg < WATCH_MIN_AVG) {
+    if (rep.avg !== null && rep.avg < WATCH_MIN_AVG) {
       alerts.push({
         id: `below-${rep.id}`,
         kind: "Below threshold",

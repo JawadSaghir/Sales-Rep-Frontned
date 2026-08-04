@@ -39,7 +39,13 @@ export default async function RepPage({ params }: { params: { repId: string } })
 
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12 }}>
         <Kpi title="Sessions" value={rep.sessions} />
-        <Kpi title="Avg score" value={rep.avg} sub={deltaLabel(rep.delta)} subColor={deltaColor(rep.delta)} />
+        {/* null = never scored, so "—" rather than a 0 that reads as a failure. */}
+        <Kpi
+          title="Avg score"
+          value={rep.avg === null ? "—" : rep.avg}
+          sub={rep.delta === null ? (rep.avg === null ? "nothing scored yet" : undefined) : deltaLabel(rep.delta)}
+          subColor={rep.delta === null ? undefined : deltaColor(rep.delta)}
+        />
         {/* objectionPct stays null until the API exposes a per-rep aggregate. */}
         <Kpi
           title="Objection handling"

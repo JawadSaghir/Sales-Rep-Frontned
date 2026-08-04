@@ -8,8 +8,10 @@ export interface Rep {
   initials: string;
   team: string;
   sessions: number;          // total sessions ever
-  avg: number;               // mean of scoredSessions below
-  delta: number;             // latest score vs the mean of earlier ones
+  // null = never scored. A rep with only abandoned rooms has no mean, and
+  // rendering 0 read as "scored zero on everything" rather than "no data yet".
+  avg: number | null;        // mean of `series` below
+  delta: number | null;      // latest score vs the mean of earlier ones
   // null = we cannot know yet. Our scorecard exposes objection-handling only
   // per session, inside GET /api/sessions/{id}, so a per-rep "criteria met"
   // rate would cost one detail request per session per rep. Rendered as "—"

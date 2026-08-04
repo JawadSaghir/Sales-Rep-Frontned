@@ -31,7 +31,13 @@ export default async function TeamPage() {
 
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 14 }}>
         <StatCard title="Sessions" value={kpis.sessions} sub="roleplays completed" delta={`+${kpis.sessionsDelta} wk`} deltaTone="up" />
-        <StatCard title="Avg score" value={kpis.avgScore} sub="out of 100" delta={deltaLabel(kpis.avgDelta)} deltaTone="up" />
+        <StatCard
+          title="Avg score"
+          value={kpis.avgScore === null ? "—" : kpis.avgScore}
+          sub={kpis.avgScore === null ? "nothing scored yet" : "out of 100"}
+          delta={kpis.avgScore === null ? undefined : deltaLabel(kpis.avgDelta)}
+          deltaTone="up"
+        />
         {/* Objection handling is not aggregated per rep yet — see lib/admin/data.ts. */}
         <StatCard
           title="Objection handling"
@@ -77,7 +83,7 @@ export default async function TeamPage() {
 
         {reps.map((rep) => {
           const status = statusColors(rep.status);
-          const barColor = rep.avg < 60 ? c.red : rep.avg >= 80 ? c.ink : "#9aa1a9";
+          const barColor = rep.avg === null ? "#9aa1a9" : rep.avg < 60 ? c.red : rep.avg >= 80 ? c.ink : "#9aa1a9";
           const floor = Math.max(0, Math.min(...rep.series) - 6);
           const span = Math.max(6, Math.max(...rep.series) - floor);
           return (
@@ -97,9 +103,15 @@ export default async function TeamPage() {
                 </div>
               </div>
               <div style={{ fontSize: 14, fontWeight: 650 }}>{rep.sessions}</div>
+              {/* Never scored renders "—", not 0: a rep with only abandoned rooms
+                  has no average, and 0 read as "failed everything". */}
               <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                <span style={{ fontSize: 17, fontWeight: 800, color: rep.avg < 60 ? c.red : c.ink }}>{rep.avg}</span>
-                <span style={{ fontSize: 12, fontWeight: 650, color: deltaColor(rep.delta) }}>{deltaLabel(rep.delta)}</span>
+                <span style={{ fontSize: 17, fontWeight: 800, color: rep.avg === null ? c.faint : rep.avg < 60 ? c.red : c.ink }}>
+                  {rep.avg === null ? "—" : rep.avg}
+                </span>
+                {rep.delta !== null && (
+                  <span style={{ fontSize: 12, fontWeight: 650, color: deltaColor(rep.delta) }}>{deltaLabel(rep.delta)}</span>
+                )}
               </div>
               {/* Bars flex rather than taking a fixed 5px each. series is EVERY
                   scored session (that is what makes avg == mean(series)), so an
