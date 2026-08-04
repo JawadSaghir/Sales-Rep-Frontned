@@ -15,8 +15,20 @@ import { auth as nextAuthSession } from "@/auth";
 import { serverGet } from "@/lib/admin/server-api";
 import type { Role } from "./types";
 
-/** Where a signed-in non-admin belongs: the rep app (app/page.tsx). */
-export const REP_HOME = "/";
+/**
+ * Where a signed-in non-admin is sent when they reach an admin route.
+ *
+ * Back to the sign-in screen WITH a reason, not silently to the rep app. The
+ * silent version was actively confusing: an admin whose ADMIN_EMAILS entry was
+ * missing in production landed on the rep dashboard with nothing explaining why,
+ * and it looked like the console had failed to deploy.
+ *
+ * The `error` parameter is load-bearing twice over. app/login/page.tsx turns it
+ * into the message, and middleware.ts only lets an already-signed-in user stay on
+ * a public path when an error is present — without it they would be bounced
+ * straight back to `/` and never read this.
+ */
+export const NO_ADMIN_ACCESS = "/login?error=NotAdmin";
 
 export interface Session {
   userId: string;
@@ -75,10 +87,10 @@ export const getSession = cache(async (): Promise<Session | null> => {
   };
 });
 
-/** Guard for every admin route segment. Reps must be sent to their own app. */
+/** Guard for every admin route segment. A non-admin is told why, then sent back. */
 export async function requireAdmin(): Promise<Session> {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.role !== "admin") redirect(REP_HOME);
+  if (session.role !== "admin") redirect(NO_ADMIN_ACCESS);
   return session;
 }

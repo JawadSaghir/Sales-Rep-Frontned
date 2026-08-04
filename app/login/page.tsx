@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { auth } from "@/auth";
 import LoginPanel from "@/components/LoginPanel";
 import type { Role } from "@/lib/types";
 
@@ -23,13 +24,19 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 const ERROR_FALLBACK = "Sign-in did not complete. Try again.";
 
-function first(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
+/**
+ * Signed in, but not on the admin list (lib/auth.ts requireAdmin). Names the
+ * account, because the usual cause is signing in with the wrong Google account
+ * out of several — and "I am definitely an admin" is then checkable at a glance
+ * instead of being argued about.
+ */
+function notAdminMessage(email: string | null): string {
+  const who = email ? `${email} does not` : "That account does not";
+  return `${who} have admin access. Ask an admin to add you, or choose Sales Rep to carry on to your own dashboard.`;
 }
 
-function errorMessageFor(code: string | undefined): string | undefined {
-  if (!code) return undefined;
-  return ERROR_MESSAGES[code] ?? ERROR_FALLBACK;
+function first(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 /**
@@ -42,7 +49,7 @@ function safeRedirect(value: string | undefined): string | undefined {
   return value;
 }
 
-export default function LoginPage({
+export default async function LoginPage({
   searchParams,
 }: {
   searchParams: { callbackUrl?: string | string[]; error?: string | string[] };
@@ -51,13 +58,24 @@ export default function LoginPage({
   // operator left it with no hydration mismatch and no first-frame flash. This is
   // a routing hint only — see components/LoginPanel.tsx and lib/auth.ts.
   const choice = cookies().get("istv_role_choice")?.value;
-  const initialRole: Role = choice === "rep" ? "rep" : "admin";
+  const code = first(searchParams.error);
+
+  let errorMessage: string | undefined;
+  if (code === "NotAdmin") {
+    // Only read the session for this one code — everyone else reaching /login is
+    // signed out, so there would be nothing to read.
+    errorMessage = notAdminMessage((await auth())?.user?.email ?? null);
+  } else if (code) {
+    errorMessage = ERROR_MESSAGES[code] ?? ERROR_FALLBACK;
+  }
 
   return (
     <LoginPanel
-      initialRole={initialRole}
+      // A rejected admin attempt should not reopen on "Admin" — that is the loop
+      // they just hit. Start them on Sales Rep, which is the door that works.
+      initialRole={code === "NotAdmin" ? "rep" : ((choice === "rep" ? "rep" : "admin") as Role)}
       callbackUrl={safeRedirect(first(searchParams.callbackUrl))}
-      errorMessage={errorMessageFor(first(searchParams.error))}
+      errorMessage={errorMessage}
     />
   );
 }
