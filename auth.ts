@@ -1,7 +1,8 @@
-import NextAuth from "next-auth";
+import NextAuth, { customFetch } from "next-auth";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { isAllowedAuthEmail, normalizeAuthEmail } from "./lib/auth-utils";
+import { resilientOAuthFetch } from "./lib/oauth-fetch";
 // TEMPORARY — demo bypass link. Remove with lib/demo-access.ts.
 import { DEMO_EMAIL, DEMO_NAME, isDemoEmail, verifyDemoToken } from "./lib/demo-access";
 
@@ -27,6 +28,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           prompt: "select_account",
         },
       },
+      // Every sign-in resolves Google's endpoints from its discovery document,
+      // and that call had no timeout and no retry: one transient network blip
+      // failed the whole sign-in with `TypeError: fetch failed` and bounced the
+      // user to ?error=Configuration. See lib/oauth-fetch.ts.
+      [customFetch]: resilientOAuthFetch,
     }),
     // TEMPORARY — demo bypass link. Delete this provider with lib/demo-access.ts.
     // Never interactive: there is no form, and /api/demo is the only caller.
