@@ -4,6 +4,9 @@ node_modules/
 # Next.js build output
 .next/
 out/
+# Throwaway build dir for verifying a build without disturbing a running
+# `next dev` — see distDir in next.config.js.
+.next-verify/
 
 # Env - NEXT_PUBLIC_API_BASE is set in the Vercel dashboard, not committed
 .env*

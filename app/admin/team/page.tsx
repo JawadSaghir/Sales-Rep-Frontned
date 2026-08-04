@@ -3,7 +3,13 @@ import { getTeam, getTeamKpis, getAlerts } from "@/lib/admin/data";
 import { c, card, label, statusColors, deltaLabel, deltaColor } from "@/lib/ui";
 import StatCard from "@/components/StatCard";
 
-const GRID = "2.1fr .8fr 1fr 1.1fr 1.2fr 1fr .9fr 1.1fr 20px";
+// Every `fr` is wrapped in minmax(0, …) — the header and each row are SEPARATE
+// grids, and a bare `1.1fr` floors at min-content, so one wide cell resized that
+// row's tracks alone and the row stopped lining up with the header and its
+// neighbours. minmax(0, …) removes the content floor, so all rows share
+// identical track widths and cells clip or ellipsis instead of pushing.
+const GRID =
+  "minmax(0,2.1fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1.1fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,.9fr) minmax(0,1.1fr) 20px";
 
 export default async function TeamPage() {
   const [reps, kpis, alerts] = await Promise.all([getTeam(), getTeamKpis(), getAlerts()]);
@@ -84,7 +90,10 @@ export default async function TeamPage() {
                 <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f0f2f4", color: c.body, fontSize: 11.5, fontWeight: 750, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{rep.initials}</div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{rep.name}</div>
-                  <div style={{ fontSize: 12, color: c.muted }}>{rep.team}</div>
+                  {/* rep.team carries the rep's email (no team field exists upstream);
+                      an address is one unbreakable token, so it needs to truncate
+                      rather than widen the row. */}
+                  <div style={{ fontSize: 12, color: c.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{rep.team}</div>
                 </div>
               </div>
               <div style={{ fontSize: 14, fontWeight: 650 }}>{rep.sessions}</div>
@@ -92,9 +101,15 @@ export default async function TeamPage() {
                 <span style={{ fontSize: 17, fontWeight: 800, color: rep.avg < 60 ? c.red : c.ink }}>{rep.avg}</span>
                 <span style={{ fontSize: 12, fontWeight: 650, color: deltaColor(rep.delta) }}>{deltaLabel(rep.delta)}</span>
               </div>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 26 }}>
+              {/* Bars flex rather than taking a fixed 5px each. series is EVERY
+                  scored session (that is what makes avg == mean(series)), so an
+                  established rep has 30+ points; at a fixed width they needed
+                  ~285px in a ~120px track, which forced the fr column wide and
+                  knocked the whole row out of alignment with the header.
+                  maxWidth keeps a short series looking exactly as designed. */}
+              <div style={{ display: "flex", alignItems: "flex-end", gap: rep.series.length > 16 ? 1 : 3, height: 26, minWidth: 0, overflow: "hidden" }}>
                 {rep.series.map((v, i) => (
-                  <div key={i} style={{ width: 5, borderRadius: 2, height: Math.max(4, Math.round(6 + ((v - floor) / span) * 18)), background: barColor }} />
+                  <div key={i} style={{ flex: "1 1 0", minWidth: 1, maxWidth: 5, borderRadius: 2, height: Math.max(4, Math.round(6 + ((v - floor) / span) * 18)), background: barColor }} />
                 ))}
               </div>
               {rep.objectionPct === null ? (
