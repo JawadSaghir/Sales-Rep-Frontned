@@ -29,6 +29,11 @@ export default function AdminRepHistory({
     <HistoryList
       repSlug={repSlug}
       onOpen={(callId) => router.push(`/admin/reps/${repId}/calls/${callId}`)}
+      // The rep detail page shows Sessions and Avg score in its own KPI row just
+      // above this, computed from the same data. HistoryList's strip duplicated
+      // them and disagreed: its deltas are hardcoded, so it rendered a green
+      // "+6 pts" beside the page's red "-3 pts" for the same rep.
+      showStats={false}
     />
   );
 }

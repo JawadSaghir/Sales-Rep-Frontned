@@ -42,12 +42,20 @@ export function HistoryList({
   onOpen,
   onStart,
   repSlug,
+  showStats = true,
 }: {
   onOpen: (id: string) => void;
   // Omit to render the list read-only, without "Start a roleplay". The admin
   // console mounts it that way (components/admin/AdminRepHistory.tsx): a manager
   // reviewing someone else's history has no call to launch.
   onStart?: () => void;
+  // Set false to drop the four-card stats strip. The admin rep detail page does,
+  // for two reasons: it already shows Sessions and Avg score in its own KPI row
+  // right above, and the strip's deltas are hardcoded ("+6 pts" green) so they
+  // contradicted the computed delta ("-3 pts" red) on the same screen. The two
+  // right-hand cards are fixed strings entirely — "Opener 86%" and "Pricing" are
+  // not measured, and a manager could act on them believing they were.
+  showStats?: boolean;
   // Admin drill-in: scope the list to one rep's sessions (GET /api/sessions?rep_slug=…).
   // Undefined -> the caller's own history, same as before this prop existed.
   repSlug?: string;
@@ -125,13 +133,16 @@ export function HistoryList({
         )}
       </div>
 
-      {/* stats strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 22 }}>
-        <StatCard label="SESSIONS" value={String(sessions.length)} sub="roleplays completed" delta="+3 this week" deltaColor="var(--teal)" />
-        <StatCard label="AVG SCORE" value={String(avg)} sub="out of 100" delta="+6 pts" deltaColor="var(--teal)" />
-        <StatCard label="BEST CATEGORY" value="Opener" sub="86% criteria met" />
-        <StatCard label="WEAKEST" value="Pricing" sub="objection handling" delta="Drill it" deltaColor="var(--brand-ink)" />
-      </div>
+      {/* stats strip. Four of these values are hardcoded ("+3 this week",
+          "+6 pts", "Opener 86%", "Pricing") — see showStats. */}
+      {showStats && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 22 }}>
+          <StatCard label="SESSIONS" value={String(sessions.length)} sub="roleplays completed" delta="+3 this week" deltaColor="var(--teal)" />
+          <StatCard label="AVG SCORE" value={String(avg)} sub="out of 100" delta="+6 pts" deltaColor="var(--teal)" />
+          <StatCard label="BEST CATEGORY" value="Opener" sub="86% criteria met" />
+          <StatCard label="WEAKEST" value="Pricing" sub="objection handling" delta="Drill it" deltaColor="var(--brand-ink)" />
+        </div>
+      )}
 
       {/* toolbar */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center' }}>
